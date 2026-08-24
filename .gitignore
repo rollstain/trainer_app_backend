@@ -1,0 +1,28 @@
+# Gradle
+.gradle/
+build/
+.kotlin/
+
+# Локальное окружение
+local.properties
+*.log
+*.hprof
+
+# IDE
+.idea/
+*.iml
+out/
+
+# Секреты и локальные конфиги
+.env
+.env.*
+!.env.example
+secrets/
+*-service-account.json
+serviceAccountKey.json
+src/main/resources/application-local.yml
+src/main/resources/application-local.properties
+docker-compose.override.yml
+
+# macOS
+.DS_Store

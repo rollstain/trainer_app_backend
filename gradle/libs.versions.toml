@@ -1,0 +1,29 @@
+[versions]
+
+kotlin = "2.3.0"
+springBoot = "3.5.4"
+springDependencyManagement = "1.1.7"
+springdoc = "2.8.9"
+flyway = "11.7.2"
+awssdk = "2.31.30"
+firebaseAdmin = "9.4.3"
+detekt = "1.23.6"
+
+[libraries]
+
+springdoc-openapi = { group = "org.springdoc", name = "springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+flyway-core = { group = "org.flywaydb", name = "flyway-core", version.ref = "flyway" }
+flyway-postgresql = { group = "org.flywaydb", name = "flyway-database-postgresql", version.ref = "flyway" }
+postgresql = { group = "org.postgresql", name = "postgresql", version = "42.7.7" }
+awssdk-s3 = { group = "software.amazon.awssdk", name = "s3", version.ref = "awssdk" }
+firebase-admin = { group = "com.google.firebase", name = "firebase-admin", version.ref = "firebaseAdmin" }
+detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }
+
+[plugins]
+
+kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlinSpring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+kotlinJpa = { id = "org.jetbrains.kotlin.plugin.jpa", version.ref = "kotlin" }
+springBoot = { id = "org.springframework.boot", version.ref = "springBoot" }
+springDependencyManagement = { id = "io.spring.dependency-management", version.ref = "springDependencyManagement" }
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
