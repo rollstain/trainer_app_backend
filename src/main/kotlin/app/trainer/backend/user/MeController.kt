@@ -2,10 +2,10 @@ package app.trainer.backend.user
 
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.CurrentUserId
+import jakarta.validation.Valid
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
-import jakarta.validation.Valid
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping

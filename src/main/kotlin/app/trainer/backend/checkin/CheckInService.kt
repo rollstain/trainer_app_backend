@@ -1,8 +1,8 @@
 package app.trainer.backend.checkin
 
 import app.trainer.backend.coach.CoachClientRepository
-import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachClientStatus
+import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.media.MediaFileResponse
 import app.trainer.backend.media.MediaFileService

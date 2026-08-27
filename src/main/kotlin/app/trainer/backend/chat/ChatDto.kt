@@ -1,7 +1,6 @@
 package app.trainer.backend.chat
 
 import app.trainer.backend.media.MediaFileResponse
-import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.time.Instant
 import java.util.UUID

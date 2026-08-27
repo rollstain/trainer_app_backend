@@ -24,6 +24,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 
@@ -271,8 +272,7 @@ class ProgramServiceTest {
         assertEquals(HttpStatus.CONFLICT, failure.statusCode)
     }
 
-    private inline fun <reified E : Any, R : org.springframework.data.jpa.repository.JpaRepository<E, UUID>>
-        recordSaved(repository: R): MutableList<E> {
+    private inline fun <reified E : Any, R : JpaRepository<E, UUID>> recordSaved(repository: R): MutableList<E> {
         val saved = mutableListOf<E>()
         `when`(repository.save(anyNonNull<E>())).thenAnswer { invocation ->
             val entity = invocation.arguments[0] as E

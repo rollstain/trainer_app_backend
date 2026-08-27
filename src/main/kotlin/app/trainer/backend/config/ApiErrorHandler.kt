@@ -49,6 +49,7 @@ class ApiErrorHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handleUnreadableBody(failure: HttpMessageNotReadableException): ResponseEntity<ApiErrorResponse> {
+        logger.warn("Тело запроса не разобрано: {}", failure.mostSpecificCause.message)
         return ResponseEntity.badRequest().body(
             ApiErrorResponse(
                 status = HttpStatus.BAD_REQUEST.value(),

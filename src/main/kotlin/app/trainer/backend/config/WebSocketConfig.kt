@@ -3,6 +3,7 @@ package app.trainer.backend.config
 import app.trainer.backend.chat.ChatWebSocketHandler
 import app.trainer.backend.chat.WEB_SOCKET_USER_ID_ATTRIBUTE
 import java.util.UUID
+import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
 import org.springframework.http.server.ServerHttpRequest
@@ -34,6 +35,8 @@ class WebSocketConfig(
 
 private class TokenHandshakeInterceptor(private val jwtDecoder: JwtDecoder) : HandshakeInterceptor {
 
+    private val logger = LoggerFactory.getLogger(TokenHandshakeInterceptor::class.java)
+
     override fun beforeHandshake(
         request: ServerHttpRequest,
         response: ServerHttpResponse,
@@ -48,8 +51,10 @@ private class TokenHandshakeInterceptor(private val jwtDecoder: JwtDecoder) : Ha
             attributes[WEB_SOCKET_USER_ID_ATTRIBUTE] = UUID.fromString(jwtDecoder.decode(token).subject)
             true
         } catch (invalidToken: JwtException) {
+            logger.debug("Рукопожатие отклонено: токен не разобран", invalidToken)
             false
         } catch (invalidSubject: IllegalArgumentException) {
+            logger.debug("Рукопожатие отклонено: в токене не userId", invalidSubject)
             false
         }
     }

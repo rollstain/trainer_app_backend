@@ -13,8 +13,8 @@ import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
-import org.springframework.data.domain.Limit
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.data.domain.Limit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -268,5 +268,4 @@ class ChatService(
             toResponse(message = message, attachments = attachmentsByMessage[message.id].orEmpty())
         }
     }
-
 }

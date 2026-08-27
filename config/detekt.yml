@@ -1,0 +1,58 @@
+build:
+  maxIssues: 0
+
+complexity:
+  LongParameterList:
+    functionThreshold: 9
+    constructorThreshold: 11
+    ignoreAnnotated: ['Entity']
+  TooManyFunctions:
+    thresholdInFiles: 30
+    thresholdInClasses: 20
+    thresholdInInterfaces: 15
+    ignorePrivate: true
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+
+performance:
+  SpreadOperator:
+    excludes: ['**/TrainerApplication.kt']
+
+naming:
+  MatchingDeclarationName:
+    active: false
+
+style:
+  ForbiddenComment:
+    active: true
+    comments:
+      - reason: 'Задачи заводятся в трекере, а не в коде'
+        value: 'TODO:'
+      - reason: 'Задачи заводятся в трекере, а не в коде'
+        value: 'FIXME:'
+  MagicNumber:
+    excludes: ['**/test/**']
+    ignorePropertyDeclaration: true
+    ignoreRanges: true
+  MaxLineLength:
+    maxLineLength: 120
+  ReturnCount:
+    active: false
+  ThrowsCount:
+    active: false
+  WildcardImport:
+    active: true
+
+formatting:
+  ArgumentListWrapping:
+    active: false
+  Filename:
+    active: false
+  ImportOrdering:
+    layout: '*'
+  MaximumLineLength:
+    active: false
+  NoWildcardImports:
+    active: true
