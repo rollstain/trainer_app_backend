@@ -50,6 +50,26 @@ class CheckInController(private val checkInService: CheckInService) {
         return checkInService.ownCheckIns(clientUserId = clientUserId, from = from, to = to)
     }
 
+    @GetMapping("/coach/check-ins/awaiting")
+    fun awaiting(@CurrentUserId coachUserId: UUID): List<AwaitingCheckInResponse> {
+        return checkInService.awaitingReview(coachUserId = coachUserId)
+    }
+
+    @PostMapping("/coach/clients/{clientUserId}/check-ins/{checkInId}/review")
+    fun review(
+        @CurrentUserId coachUserId: UUID,
+        @PathVariable clientUserId: UUID,
+        @PathVariable checkInId: UUID,
+        @Valid @RequestBody request: ReviewCheckInRequest,
+    ): CheckInResponse {
+        return checkInService.review(
+            coachUserId = coachUserId,
+            clientUserId = clientUserId,
+            checkInId = checkInId,
+            request = request,
+        )
+    }
+
     @GetMapping("/coach/clients/{clientUserId}/check-ins")
     fun clientCheckIns(
         @CurrentUserId coachUserId: UUID,

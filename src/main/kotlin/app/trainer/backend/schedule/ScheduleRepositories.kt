@@ -25,6 +25,14 @@ interface TrainingSlotRepository : JpaRepository<TrainingSlotEntity, UUID> {
         to: Instant,
     ): List<TrainingSlotEntity>
 
+    fun findByStartsAtBetweenOrderByStartsAtAsc(from: Instant, to: Instant): List<TrainingSlotEntity>
+
+    fun findByCoachIdAndClientUserIdAndStartsAtAfter(
+        coachId: UUID,
+        clientUserId: UUID,
+        startsAt: Instant,
+    ): List<TrainingSlotEntity>
+
     @Query(
         value = """
             select s.id from training_slots s

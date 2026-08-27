@@ -6,13 +6,15 @@ import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.media.MediaOwnerKind
 import app.trainer.backend.media.PrepareUploadRequest
 import app.trainer.backend.media.PrepareUploadResponse
-import app.trainer.backend.push.PushPayload
-import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
+import app.trainer.backend.push.PushText
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import org.springframework.data.domain.Limit
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -21,7 +23,6 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val HISTORY_PAGE_SIZE = 50
 private const val PUSH_DIALOG_ID_KEY = "dialogId"
-private const val ATTACHMENT_PUSH_PREVIEW = "Вложение"
 
 @Service
 class ChatService(
@@ -30,9 +31,8 @@ class ChatService(
     private val dialogReadRepository: DialogReadRepository,
     private val coachRepository: CoachRepository,
     private val userRepository: UserRepository,
-    private val broadcaster: MessageBroadcaster,
     private val mediaFileService: MediaFileService,
-    private val pushSender: PushSender,
+    private val eventPublisher: ApplicationEventPublisher,
     private val clock: Clock,
 ) {
 
@@ -47,12 +47,20 @@ class ChatService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Пустое сообщение без вложений")
         }
 
-        val dialog = dialogRepository.findWithLockById(dialogId) ?: dialogNotFound()
-        requireParticipant(dialog = dialog, userId = senderUserId)
+        requireDialogAccess(dialogId = dialogId, userId = senderUserId)
+        val messageId = UUID.randomUUID()
+        val attachments = mediaFileService.link(
+            mediaFileIds = request.attachmentIds,
+            ownerKind = MediaOwnerKind.DIALOG_MESSAGE,
+            ownerId = messageId,
+            scopeId = dialogId,
+            uploaderUserId = senderUserId,
+        )
 
+        val dialog = dialogRepository.findWithLockById(dialogId) ?: dialogNotFound()
         dialog.lastMessageSeq += 1
         val message = MessageEntity(
-            id = UUID.randomUUID(),
+            id = messageId,
             dialogId = dialogId,
             seq = dialog.lastMessageSeq,
             senderUserId = senderUserId,
@@ -61,23 +69,14 @@ class ChatService(
             createdAt = Instant.now(clock),
         )
         messageRepository.save(message)
-        val attachments = mediaFileService.link(
-            mediaFileIds = request.attachmentIds,
-            ownerKind = MediaOwnerKind.DIALOG_MESSAGE,
-            ownerId = message.id,
-            scopeId = dialogId,
-            uploaderUserId = senderUserId,
-        )
 
         val response = toResponse(message = message, attachments = attachments.map(mediaFileService::toResponse))
-        val recipients = participantsOf(dialog) - senderUserId
-        val delivered = broadcaster.broadcast(recipientUserIds = recipients, message = response)
-        notifyOffline(
-            offlineUserIds = recipients - delivered,
-            senderUserId = senderUserId,
-            dialogId = dialogId,
-            message = message,
-            hasAttachments = attachments.isNotEmpty(),
+        eventPublisher.publishEvent(
+            MessageSentEvent(
+                message = response,
+                recipientUserIds = participantsOf(dialog) - senderUserId,
+                push = newMessagePush(dialogId),
+            )
         )
         return response
     }
@@ -236,29 +235,11 @@ class ChatService(
         return setOf(coach.userId, dialog.clientUserId)
     }
 
-    private fun notifyOffline(
-        offlineUserIds: Set<UUID>,
-        senderUserId: UUID,
-        dialogId: UUID,
-        message: MessageEntity,
-        hasAttachments: Boolean,
-    ) {
-        if (offlineUserIds.isEmpty()) return
-        val senderName = userRepository.findByIdOrNull(senderUserId)?.displayName.orEmpty()
-        val preview = when {
-            message.body.isNotBlank() -> message.body
-            hasAttachments -> ATTACHMENT_PUSH_PREVIEW
-            else -> return
-        }
-        pushSender.send(
-            userIds = offlineUserIds,
-            payload = PushPayload(
-                title = senderName,
-                body = preview,
-                data = mapOf(PUSH_DIALOG_ID_KEY to dialogId.toString()),
-            ),
-        )
-    }
+    private fun newMessagePush(dialogId: UUID): PushMessage = PushMessage(
+        channel = PushChannel.CHAT,
+        text = PushText.NEW_CHAT_MESSAGE,
+        data = mapOf(PUSH_DIALOG_ID_KEY to dialogId.toString()),
+    )
 
     private fun dialogNotFound(): Nothing {
         throw ResponseStatusException(HttpStatus.NOT_FOUND, "Диалог не найден")

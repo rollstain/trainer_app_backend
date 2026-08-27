@@ -28,10 +28,25 @@ data class SaveCheckInRequest(
     @field:Min(MIN_RATING)
     @field:Max(MAX_RATING)
     val sleepQuality: Int?,
+    @field:Min(MIN_RATING)
+    @field:Max(MAX_RATING)
+    val adherence: Int?,
     @field:Size(max = NOTES_MAX_LENGTH)
     val notes: String?,
     @field:Size(max = PHOTOS_MAX_COUNT)
     val photoIds: List<UUID>,
+)
+
+data class AwaitingCheckInResponse(
+    val checkInId: UUID,
+    val clientUserId: UUID,
+    val clientDisplayName: String,
+    val checkInDate: LocalDate,
+)
+
+data class ReviewCheckInRequest(
+    @field:Size(max = NOTES_MAX_LENGTH)
+    val comment: String?,
 )
 
 data class CheckInResponse(
@@ -44,6 +59,9 @@ data class CheckInResponse(
     val hipsMillimeters: Int?,
     val wellbeing: Int?,
     val sleepQuality: Int?,
+    val adherence: Int?,
     val notes: String?,
+    val coachComment: String?,
+    val isReviewed: Boolean,
     val photos: List<MediaFileResponse>,
 )

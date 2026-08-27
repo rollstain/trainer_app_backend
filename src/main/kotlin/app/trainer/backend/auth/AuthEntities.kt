@@ -18,6 +18,9 @@ class InviteEntity(
     @Column(name = "coach_id")
     val coachId: UUID,
 
+    @Column(name = "target_user_id")
+    val targetUserId: UUID?,
+
     @Column(name = "code")
     val code: String,
 

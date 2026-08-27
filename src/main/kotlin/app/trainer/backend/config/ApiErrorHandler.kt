@@ -3,6 +3,7 @@ package app.trainer.backend.config
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -10,6 +11,7 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val UNEXPECTED_FAILURE_MESSAGE = "Что-то пошло не так, попробуйте позже"
 private const val VALIDATION_FAILURE_MESSAGE = "Проверьте заполненные поля"
+private const val MALFORMED_BODY_MESSAGE = "Некорректное тело запроса"
 
 data class ApiErrorResponse(
     val status: Int,
@@ -41,6 +43,17 @@ class ApiErrorHandler {
                 status = HttpStatus.BAD_REQUEST.value(),
                 message = VALIDATION_FAILURE_MESSAGE,
                 fieldErrors = fieldErrors,
+            )
+        )
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException::class)
+    fun handleUnreadableBody(failure: HttpMessageNotReadableException): ResponseEntity<ApiErrorResponse> {
+        return ResponseEntity.badRequest().body(
+            ApiErrorResponse(
+                status = HttpStatus.BAD_REQUEST.value(),
+                message = MALFORMED_BODY_MESSAGE,
+                fieldErrors = emptyMap(),
             )
         )
     }

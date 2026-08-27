@@ -11,8 +11,7 @@ data class InviteResponse(
 data class RedeemInviteRequest(
     @field:NotBlank
     val code: String,
-    @field:NotBlank
-    val displayName: String,
+    val displayName: String?,
     @field:NotBlank
     val deviceInfo: String,
 )

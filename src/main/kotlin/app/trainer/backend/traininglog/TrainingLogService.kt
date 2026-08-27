@@ -43,6 +43,8 @@ class TrainingLogService(
                 name = request.name.trim(),
                 muscleGroup = request.muscleGroup?.trim()?.ifEmpty { null },
                 kind = request.kind,
+                description = request.description?.trim()?.ifEmpty { null },
+                videoUrl = request.videoUrl?.trim()?.ifEmpty { null },
                 createdAt = Instant.now(clock),
                 archivedAt = null,
             )
@@ -231,6 +233,8 @@ class TrainingLogService(
         muscleGroup = exercise.muscleGroup,
         kind = exercise.kind,
         isOwnedByCoach = exercise.coachId != null,
+        description = exercise.description,
+        videoUrl = exercise.videoUrl,
         lastRepetitions = latest?.repetitions,
         lastWeightGrams = latest?.weightGrams,
         lastDurationSeconds = latest?.durationSeconds,

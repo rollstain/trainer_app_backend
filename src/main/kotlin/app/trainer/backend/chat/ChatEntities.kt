@@ -57,10 +57,10 @@ class MessageEntity(
     val createdAt: Instant,
 )
 
-class DialogReadId : Serializable {
-    var dialogId: UUID? = null
-    var userId: UUID? = null
-}
+data class DialogReadId(
+    var dialogId: UUID? = null,
+    var userId: UUID? = null,
+) : Serializable
 
 @Entity
 @Table(name = "dialog_reads")

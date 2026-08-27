@@ -10,12 +10,17 @@ private const val EXERCISE_NAME_MAX_LENGTH = 120
 private const val NOTES_MAX_LENGTH = 2000
 private const val SETS_MAX_COUNT = 200
 
+private const val EXERCISE_DESCRIPTION_MAX_LENGTH = 2000
+private const val EXERCISE_VIDEO_URL_MAX_LENGTH = 500
+
 data class ExerciseResponse(
     val id: UUID,
     val name: String,
     val muscleGroup: String?,
     val kind: ExerciseKind,
     val isOwnedByCoach: Boolean,
+    val description: String?,
+    val videoUrl: String?,
     val lastRepetitions: Int?,
     val lastWeightGrams: Int?,
     val lastDurationSeconds: Int?,
@@ -29,6 +34,10 @@ data class CreateExerciseRequest(
     @field:Size(max = EXERCISE_NAME_MAX_LENGTH)
     val muscleGroup: String?,
     val kind: ExerciseKind,
+    @field:Size(max = EXERCISE_DESCRIPTION_MAX_LENGTH)
+    val description: String?,
+    @field:Size(max = EXERCISE_VIDEO_URL_MAX_LENGTH)
+    val videoUrl: String?,
 )
 
 data class TrainingSetRequest(

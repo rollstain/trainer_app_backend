@@ -24,6 +24,18 @@ class CoachEntity(
     @Column(name = "cancellation_window_hours")
     var cancellationWindowHours: Int,
 
+    @Column(name = "reminder_hour")
+    var reminderHour: Int,
+
+    @Column(name = "session_reminders_enabled")
+    var sessionRemindersEnabled: Boolean,
+
+    @Column(name = "diary_reminders_enabled")
+    var diaryRemindersEnabled: Boolean,
+
+    @Column(name = "check_in_reminders_enabled")
+    var checkInRemindersEnabled: Boolean,
+
     @Column(name = "created_at")
     val createdAt: Instant,
 )

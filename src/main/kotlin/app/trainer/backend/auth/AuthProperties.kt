@@ -8,4 +8,5 @@ data class AuthProperties(
     val refreshTokenTtlDays: Long,
     val inviteTtlHours: Long,
     val jwtSecret: String,
+    val adminToken: String,
 )

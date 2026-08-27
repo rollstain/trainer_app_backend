@@ -7,7 +7,6 @@ import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
-import java.security.SecureRandom
 import java.time.Clock
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -16,9 +15,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
-
-private const val INVITE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-private const val INVITE_CODE_LENGTH = 6
 
 @Service
 class AuthService(
@@ -29,11 +25,10 @@ class AuthService(
     private val coachClientRepository: CoachClientRepository,
     private val chatService: ChatService,
     private val tokenService: TokenService,
+    private val inviteCodeGenerator: InviteCodeGenerator,
     private val properties: AuthProperties,
     private val clock: Clock,
 ) {
-
-    private val random = SecureRandom()
 
     @Transactional
     fun createInvite(coachUserId: UUID): InviteResponse {
@@ -43,7 +38,8 @@ class AuthService(
         val invite = InviteEntity(
             id = UUID.randomUUID(),
             coachId = coach.id,
-            code = generateUnusedCode(),
+            targetUserId = null,
+            code = inviteCodeGenerator.nextUnusedCode(),
             expiresAt = now.plus(properties.inviteTtlHours, ChronoUnit.HOURS),
             usedAt = null,
             usedByUserId = null,
@@ -65,10 +61,28 @@ class AuthService(
             throw ResponseStatusException(HttpStatus.GONE, "Срок приглашения истёк")
         }
 
+        val existingUserId = invite.targetUserId
+        val userId = if (existingUserId != null) {
+            existingUserId
+        } else {
+            joinAsNewClient(invite = invite, displayName = request.displayName, now = now)
+        }
+
+        invite.usedAt = now
+        invite.usedByUserId = userId
+
+        return openSession(userId = userId, deviceInfo = request.deviceInfo)
+    }
+
+    private fun joinAsNewClient(invite: InviteEntity, displayName: String?, now: Instant): UUID {
+        val name = displayName?.trim().orEmpty()
+        if (name.isEmpty()) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Не указано имя")
+        }
         val user = userRepository.save(
             UserEntity(
                 id = UUID.randomUUID(),
-                displayName = request.displayName,
+                displayName = name,
                 phone = null,
                 email = null,
                 createdAt = now,
@@ -84,11 +98,7 @@ class AuthService(
             )
         )
         chatService.openDialog(coachId = invite.coachId, clientUserId = user.id)
-
-        invite.usedAt = now
-        invite.usedByUserId = user.id
-
-        return openSession(userId = user.id, deviceInfo = request.deviceInfo)
+        return user.id
     }
 
     @Transactional
@@ -137,21 +147,5 @@ class AuthService(
             refreshToken = refreshToken,
             accessTokenExpiresAt = accessToken.expiresAt,
         )
-    }
-
-    private fun generateUnusedCode(): String {
-        var code = randomCode()
-        while (inviteRepository.findByCode(code) != null) {
-            code = randomCode()
-        }
-        return code
-    }
-
-    private fun randomCode(): String {
-        val builder = StringBuilder(INVITE_CODE_LENGTH)
-        repeat(INVITE_CODE_LENGTH) {
-            builder.append(INVITE_CODE_ALPHABET[random.nextInt(INVITE_CODE_ALPHABET.length)])
-        }
-        return builder.toString()
     }
 }

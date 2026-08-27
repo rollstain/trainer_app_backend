@@ -5,14 +5,15 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.messaging.FirebaseMessaging
 import java.io.File
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 private const val FIREBASE_APP_NAME = "trainer-push"
+private const val CONFIGURED_CREDENTIALS_EXPRESSION = "'\${trainer.push.credentials-path:}'.trim().length() > 0"
 
 @ConfigurationProperties(prefix = "trainer.push")
 data class PushProperties(val credentialsPath: String)
@@ -22,7 +23,7 @@ data class PushProperties(val credentialsPath: String)
 class PushConfig {
 
     @Bean
-    @ConditionalOnProperty(prefix = "trainer.push", name = ["credentials-path"], matchIfMissing = false)
+    @ConditionalOnExpression(CONFIGURED_CREDENTIALS_EXPRESSION)
     fun firebaseMessaging(properties: PushProperties): FirebaseMessaging {
         val credentialsFile = File(properties.credentialsPath)
         require(credentialsFile.isFile) {
@@ -37,11 +38,16 @@ class PushConfig {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "trainer.push", name = ["credentials-path"], matchIfMissing = false)
+    @ConditionalOnExpression(CONFIGURED_CREDENTIALS_EXPRESSION)
     fun fcmPushSender(
         messaging: FirebaseMessaging,
         tokenRepository: PushTokenRepository,
-    ): PushSender = FcmPushSender(messaging = messaging, tokenRepository = tokenRepository)
+        pushTexts: PushTexts,
+    ): PushSender = FcmPushSender(
+        messaging = messaging,
+        tokenRepository = tokenRepository,
+        pushTexts = pushTexts,
+    )
 
     @Bean
     @ConditionalOnMissingBean(PushSender::class)

@@ -33,6 +33,12 @@ class ExerciseEntity(
     @Column(name = "kind")
     var kind: ExerciseKind,
 
+    @Column(name = "description")
+    var description: String?,
+
+    @Column(name = "video_url")
+    var videoUrl: String?,
+
     @Column(name = "created_at")
     val createdAt: Instant,
 

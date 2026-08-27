@@ -40,6 +40,7 @@ class SecurityConfig(private val properties: AuthProperties) {
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
                 it.requestMatchers("/auth/invites/redeem", "/auth/refresh").permitAll()
+                it.requestMatchers("/admin/**").permitAll()
                 it.requestMatchers("/ws/**").permitAll()
                 it.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 it.anyRequest().authenticated()

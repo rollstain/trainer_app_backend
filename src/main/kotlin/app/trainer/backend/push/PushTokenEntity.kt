@@ -9,6 +9,7 @@ import jakarta.persistence.Table
 import java.time.Instant
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.transaction.annotation.Transactional
 
 enum class PushPlatform { ANDROID, IOS }
 
@@ -30,6 +31,9 @@ class PushTokenEntity(
     @Column(name = "token")
     val token: String,
 
+    @Column(name = "locale")
+    var locale: String?,
+
     @Column(name = "updated_at")
     var updatedAt: Instant,
 )
@@ -40,5 +44,6 @@ interface PushTokenRepository : JpaRepository<PushTokenEntity, UUID> {
 
     fun findByUserIdIn(userIds: Collection<UUID>): List<PushTokenEntity>
 
+    @Transactional
     fun deleteByToken(token: String)
 }

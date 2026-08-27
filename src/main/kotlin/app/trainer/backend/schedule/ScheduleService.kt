@@ -4,8 +4,10 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
-import app.trainer.backend.push.PushPayload
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
@@ -19,8 +21,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
-private const val WAITLIST_PUSH_TITLE = "Освободилось время"
-private const val WAITLIST_PUSH_BODY = "Слот, который вы ждали, снова свободен"
 private const val PUSH_SLOT_ID_KEY = "slotId"
 
 @Service
@@ -152,6 +152,23 @@ class ScheduleService(
     }
 
     @Transactional
+    fun releaseBookingsOf(coachId: UUID, clientUserId: UUID) {
+        slotRepository
+            .findByCoachIdAndClientUserIdAndStartsAtAfter(
+                coachId = coachId,
+                clientUserId = clientUserId,
+                startsAt = Instant.now(clock),
+            )
+            .filter { it.status == SlotStatus.BOOKED }
+            .forEach { slot ->
+                slot.status = SlotStatus.FREE
+                slot.clientUserId = null
+                rejectPendingRequest(slotId = slot.id)
+                notifyWaitlist(slot)
+            }
+    }
+
+    @Transactional
     fun completeSlot(coachUserId: UUID, slotId: UUID): CoachSlotResponse {
         val coach = requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
@@ -232,9 +249,9 @@ class ScheduleService(
         waiting.forEach { entry -> entry.notifiedAt = now }
         pushSender.send(
             userIds = waiting.map { it.userId },
-            payload = PushPayload(
-                title = WAITLIST_PUSH_TITLE,
-                body = WAITLIST_PUSH_BODY,
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = PushText.WAITLIST_SLOT_FREED,
                 data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
             ),
         )

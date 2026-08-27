@@ -8,6 +8,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 @Entity
 @Table(name = "check_ins")
@@ -44,6 +46,18 @@ class CheckInEntity(
     @Column(name = "notes")
     var notes: String?,
 
+    @Column(name = "adherence")
+    var adherence: Int?,
+
+    @Column(name = "coach_comment")
+    var coachComment: String?,
+
+    @Column(name = "reviewed_at")
+    var reviewedAt: Instant?,
+
+    @Column(name = "reviewed_by_coach_id")
+    var reviewedByCoachId: UUID?,
+
     @Column(name = "created_at")
     val createdAt: Instant,
 
@@ -52,6 +66,23 @@ class CheckInEntity(
 )
 
 interface CheckInRepository : JpaRepository<CheckInEntity, UUID> {
+
+    @Query(
+        value = """
+            select c.* from check_ins c
+            join coach_clients l on l.user_id = c.client_user_id
+            where l.coach_id = :coachId
+              and l.status = 'ACTIVE'
+              and c.reviewed_at is null
+            order by c.check_in_date desc
+            limit :limit
+        """,
+        nativeQuery = true,
+    )
+    fun findAwaitingReview(
+        @Param("coachId") coachId: UUID,
+        @Param("limit") limit: Int,
+    ): List<CheckInEntity>
 
     fun findByClientUserIdAndCheckInDate(clientUserId: UUID, checkInDate: LocalDate): CheckInEntity?
 
