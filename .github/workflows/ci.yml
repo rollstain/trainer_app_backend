@@ -26,6 +26,9 @@ jobs:
       - name: Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Миграции не переопределяют существующие объекты
+        run: bash scripts/check-migrations.sh
+
       - name: Статический анализ
         run: ./gradlew detekt --console=plain
 

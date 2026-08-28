@@ -2,6 +2,7 @@ package app.trainer.backend.config
 
 import app.trainer.backend.auth.AuthProperties
 import app.trainer.backend.auth.external.ExternalAuthProperties
+import app.trainer.backend.link.InviteLinkProperties
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import javax.crypto.spec.SecretKeySpec
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -20,7 +21,11 @@ private const val JWT_SECRET_MIN_LENGTH = 32
 private const val HMAC_ALGORITHM = "HmacSHA256"
 
 @Configuration
-@EnableConfigurationProperties(AuthProperties::class, ExternalAuthProperties::class)
+@EnableConfigurationProperties(
+    AuthProperties::class,
+    ExternalAuthProperties::class,
+    InviteLinkProperties::class,
+)
 class SecurityConfig(private val properties: AuthProperties) {
 
     private val secretKey = SecretKeySpec(requireStrongSecret().toByteArray(), HMAC_ALGORITHM)
@@ -43,6 +48,7 @@ class SecurityConfig(private val properties: AuthProperties) {
                 it.requestMatchers("/auth/invites/redeem", "/auth/refresh", "/auth/external").permitAll()
                 it.requestMatchers("/admin/**").permitAll()
                 it.requestMatchers("/ws/**").permitAll()
+                it.requestMatchers("/i/*", "/.well-known/**").permitAll()
                 it.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 it.anyRequest().authenticated()
             }
