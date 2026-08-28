@@ -14,12 +14,15 @@ import java.time.ZoneOffset
 import java.util.Optional
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
 
 private val COACH_USER_ID: UUID = UUID.fromString("c0000000-0000-0000-0000-000000000001")
 private val COACH_ID: UUID = UUID.fromString("c0000000-0000-0000-0000-000000000002")
@@ -118,6 +121,44 @@ class ExerciseVisibilityTest {
 
         assertEquals(ExerciseOwnerKind.COACH, created.ownerKind)
         assertNull(created.ownerDisplayName, "у своих упражнений автор не нужен")
+    }
+
+    @Test
+    fun `a coach hides their own exercise from the library`() {
+        val own = exercise(name = "Свой", ownerKind = ExerciseOwnerKind.COACH, ownerId = COACH_ID)
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(exerciseRepository.findById(own.id)).thenReturn(Optional.of(own))
+
+        service.archiveExercise(userId = COACH_USER_ID, exerciseId = own.id)
+
+        assertEquals(NOW, own.archivedAt)
+    }
+
+    @Test
+    fun `a shared exercise belongs to nobody and cannot be hidden`() {
+        val shared = exercise(name = "Общее", ownerKind = ExerciseOwnerKind.SHARED, ownerId = null)
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(exerciseRepository.findById(shared.id)).thenReturn(Optional.of(shared))
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.archiveExercise(userId = COACH_USER_ID, exerciseId = shared.id)
+        }
+
+        assertEquals(HttpStatus.NOT_FOUND, failure.statusCode)
+        assertNull(shared.archivedAt)
+    }
+
+    @Test
+    fun `a client cannot hide the exercise their coach made`() {
+        val coachExercise = exercise(name = "Тренерское", ownerKind = ExerciseOwnerKind.COACH, ownerId = COACH_ID)
+        `when`(coachRepository.findByUserId(CLIENT_USER_ID)).thenReturn(null)
+        `when`(exerciseRepository.findById(coachExercise.id)).thenReturn(Optional.of(coachExercise))
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.archiveExercise(userId = CLIENT_USER_ID, exerciseId = coachExercise.id)
+        }
+
+        assertEquals(HttpStatus.NOT_FOUND, failure.statusCode)
     }
 
     private fun givenLibrary() {

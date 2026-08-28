@@ -59,6 +59,12 @@ class TrainingLogController(private val trainingLogService: TrainingLogService) 
         return trainingLogService.createExercise(userId = userId, request = request)
     }
 
+    @DeleteMapping("/exercises/{exerciseId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun archiveExercise(@CurrentUserId userId: UUID, @PathVariable exerciseId: UUID) {
+        trainingLogService.archiveExercise(userId = userId, exerciseId = exerciseId)
+    }
+
     @PostMapping("/coach/exercises/video-uploads")
     fun prepareVideoUpload(
         @CurrentUserId coachUserId: UUID,

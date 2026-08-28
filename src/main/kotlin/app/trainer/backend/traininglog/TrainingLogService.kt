@@ -169,6 +169,18 @@ class TrainingLogService(
     }
 
     @Transactional
+    fun archiveExercise(userId: UUID, exerciseId: UUID) {
+        val exercise = exerciseRepository.findByIdOrNull(exerciseId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Упражнение не найдено")
+        val coach = coachRepository.findByUserId(userId)
+        val ownerId = coach?.id ?: userId
+        if (exercise.ownerKind == ExerciseOwnerKind.SHARED || exercise.ownerId != ownerId) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Упражнение не найдено")
+        }
+        exercise.archivedAt = Instant.now(clock)
+    }
+
+    @Transactional
     fun saveEntry(
         clientUserId: UUID,
         entryDate: LocalDate,
