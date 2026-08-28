@@ -19,12 +19,11 @@ import org.springframework.web.server.ResponseStatusException
 @Service
 class AuthService(
     private val inviteRepository: InviteRepository,
-    private val deviceSessionRepository: DeviceSessionRepository,
     private val userRepository: UserRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
     private val chatService: ChatService,
-    private val tokenService: TokenService,
+    private val sessionOpener: SessionOpener,
     private val inviteCodeGenerator: InviteCodeGenerator,
     private val properties: AuthProperties,
     private val clock: Clock,
@@ -52,14 +51,7 @@ class AuthService(
     @Transactional
     fun redeemInvite(request: RedeemInviteRequest): AuthTokensResponse {
         val now = Instant.now(clock)
-        val invite = inviteRepository.findByCode(request.code.uppercase())
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Приглашение не найдено")
-        if (invite.usedAt != null) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Приглашение уже использовано")
-        }
-        if (invite.expiresAt.isBefore(now)) {
-            throw ResponseStatusException(HttpStatus.GONE, "Срок приглашения истёк")
-        }
+        val invite = requireUsableInvite(code = request.code, now = now)
 
         val existingUserId = invite.targetUserId
         val userId = if (existingUserId != null) {
@@ -71,7 +63,45 @@ class AuthService(
         invite.usedAt = now
         invite.usedByUserId = userId
 
-        return openSession(userId = userId, deviceInfo = request.deviceInfo)
+        return sessionOpener.openSession(userId = userId, deviceInfo = request.deviceInfo)
+    }
+
+    @Transactional
+    fun joinCoachByCode(userId: UUID, code: String) {
+        val now = Instant.now(clock)
+        val invite = requireUsableInvite(code = code, now = now)
+        if (invite.targetUserId != null) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Этот код выдан для входа, а не для приглашения")
+        }
+        val existingLink = coachClientRepository.findByCoachIdAndUserId(coachId = invite.coachId, userId = userId)
+        if (existingLink != null) {
+            existingLink.status = CoachClientStatus.ACTIVE
+        } else {
+            coachClientRepository.save(
+                CoachClientEntity(
+                    id = UUID.randomUUID(),
+                    coachId = invite.coachId,
+                    userId = userId,
+                    status = CoachClientStatus.ACTIVE,
+                    createdAt = now,
+                )
+            )
+            chatService.openDialog(coachId = invite.coachId, clientUserId = userId)
+        }
+        invite.usedAt = now
+        invite.usedByUserId = userId
+    }
+
+    private fun requireUsableInvite(code: String, now: Instant): InviteEntity {
+        val invite = inviteRepository.findByCode(code.uppercase())
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Приглашение не найдено")
+        if (invite.usedAt != null) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Приглашение уже использовано")
+        }
+        if (invite.expiresAt.isBefore(now)) {
+            throw ResponseStatusException(HttpStatus.GONE, "Срок приглашения истёк")
+        }
+        return invite
     }
 
     private fun joinAsNewClient(invite: InviteEntity, displayName: String?, now: Instant): UUID {
@@ -99,53 +129,5 @@ class AuthService(
         )
         chatService.openDialog(coachId = invite.coachId, clientUserId = user.id)
         return user.id
-    }
-
-    @Transactional
-    fun refresh(request: RefreshRequest): AuthTokensResponse {
-        val now = Instant.now(clock)
-        val session = deviceSessionRepository.findByRefreshTokenHash(tokenService.hash(request.refreshToken))
-            ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Сессия не найдена")
-        if (session.revokedAt != null) {
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Сессия отозвана")
-        }
-        val sessionExpiresAt = session.createdAt.plus(properties.refreshTokenTtlDays, ChronoUnit.DAYS)
-        if (sessionExpiresAt.isBefore(now)) {
-            session.revokedAt = now
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Срок сессии истёк")
-        }
-
-        val refreshToken = tokenService.generateRefreshToken()
-        session.refreshTokenHash = tokenService.hash(refreshToken)
-        session.lastSeenAt = now
-
-        val accessToken = tokenService.issueAccessToken(session.userId)
-        return AuthTokensResponse(
-            accessToken = accessToken.value,
-            refreshToken = refreshToken,
-            accessTokenExpiresAt = accessToken.expiresAt,
-        )
-    }
-
-    private fun openSession(userId: UUID, deviceInfo: String): AuthTokensResponse {
-        val now = Instant.now(clock)
-        val refreshToken = tokenService.generateRefreshToken()
-        deviceSessionRepository.save(
-            DeviceSessionEntity(
-                id = UUID.randomUUID(),
-                userId = userId,
-                refreshTokenHash = tokenService.hash(refreshToken),
-                deviceInfo = deviceInfo,
-                createdAt = now,
-                lastSeenAt = now,
-                revokedAt = null,
-            )
-        )
-        val accessToken = tokenService.issueAccessToken(userId)
-        return AuthTokensResponse(
-            accessToken = accessToken.value,
-            refreshToken = refreshToken,
-            accessTokenExpiresAt = accessToken.expiresAt,
-        )
     }
 }

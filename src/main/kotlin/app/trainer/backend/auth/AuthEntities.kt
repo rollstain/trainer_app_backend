@@ -51,6 +51,12 @@ class DeviceSessionEntity(
     @Column(name = "refresh_token_hash")
     var refreshTokenHash: String,
 
+    @Column(name = "previous_refresh_token_hash")
+    var previousRefreshTokenHash: String?,
+
+    @Column(name = "rotated_at")
+    var rotatedAt: Instant?,
+
     @Column(name = "device_info")
     val deviceInfo: String,
 

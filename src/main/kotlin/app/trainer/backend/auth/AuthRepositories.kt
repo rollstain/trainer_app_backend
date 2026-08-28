@@ -14,5 +14,9 @@ interface DeviceSessionRepository : JpaRepository<DeviceSessionEntity, UUID> {
 
     fun findByRefreshTokenHash(refreshTokenHash: String): DeviceSessionEntity?
 
+    fun findByPreviousRefreshTokenHash(previousRefreshTokenHash: String): DeviceSessionEntity?
+
+    fun findByUserIdAndRevokedAtIsNullOrderByLastSeenAtDesc(userId: UUID): List<DeviceSessionEntity>
+
     fun findByUserId(userId: UUID): List<DeviceSessionEntity>
 }

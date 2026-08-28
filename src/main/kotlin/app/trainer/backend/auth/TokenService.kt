@@ -16,6 +16,8 @@ import org.springframework.stereotype.Service
 
 private const val REFRESH_TOKEN_BYTES = 32
 
+const val SESSION_ID_CLAIM = "sid"
+
 @Service
 class TokenService(
     private val jwtEncoder: JwtEncoder,
@@ -25,11 +27,12 @@ class TokenService(
 
     private val random = SecureRandom()
 
-    fun issueAccessToken(userId: UUID): AccessToken {
+    fun issueAccessToken(userId: UUID, sessionId: UUID): AccessToken {
         val issuedAt = Instant.now(clock)
         val expiresAt = issuedAt.plus(properties.accessTokenTtlMinutes, ChronoUnit.MINUTES)
         val claims = JwtClaimsSet.builder()
             .subject(userId.toString())
+            .claim(SESSION_ID_CLAIM, sessionId.toString())
             .issuedAt(issuedAt)
             .expiresAt(expiresAt)
             .build()
