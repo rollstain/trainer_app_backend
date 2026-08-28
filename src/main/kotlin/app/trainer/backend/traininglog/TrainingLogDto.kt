@@ -3,6 +3,7 @@ package app.trainer.backend.traininglog
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
@@ -78,4 +79,17 @@ data class TrainingLogEntryResponse(
     val notes: String?,
     val sets: List<TrainingSetResponse>,
     val totalVolumeGrams: Long,
+)
+
+data class DiaryDayResponse(
+    val entryDate: LocalDate,
+    val volumeGrams: Long,
+)
+
+data class ClientDiarySummaryResponse(
+    val clientUserId: UUID,
+    val displayName: String,
+    val linkedAt: Instant,
+    val lastEntryDate: LocalDate?,
+    val days: List<DiaryDayResponse>,
 )

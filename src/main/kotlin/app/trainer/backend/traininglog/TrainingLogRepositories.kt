@@ -43,6 +43,22 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
     fun findByCoachIdAndArchivedAtIsNull(coachId: UUID): List<ExerciseEntity>
 }
 
+interface ClientDiaryDay {
+
+    fun getClientUserId(): UUID
+
+    fun getEntryDate(): LocalDate
+
+    fun getVolumeGrams(): Long
+}
+
+interface ClientLastEntry {
+
+    fun getClientUserId(): UUID
+
+    fun getLastEntryDate(): LocalDate
+}
+
 interface TrainingLogEntryRepository : JpaRepository<TrainingLogEntryEntity, UUID> {
 
     fun findByClientUserIdAndEntryDate(clientUserId: UUID, entryDate: LocalDate): TrainingLogEntryEntity?
@@ -52,6 +68,39 @@ interface TrainingLogEntryRepository : JpaRepository<TrainingLogEntryEntity, UUI
         from: LocalDate,
         to: LocalDate,
     ): List<TrainingLogEntryEntity>
+
+    @Query(
+        value = """
+            select e.client_user_id as clientUserId,
+                   e.entry_date as entryDate,
+                   coalesce(sum(s.repetitions * s.weight_grams), 0) as volumeGrams
+            from training_log_entries e
+            left join training_log_sets s
+              on s.entry_id = e.id and s.repetitions is not null and s.weight_grams is not null
+            where e.client_user_id = any (cast(:clientIds as uuid[]))
+              and e.entry_date between :from and :to
+            group by e.client_user_id, e.entry_date
+            order by e.entry_date
+        """,
+        nativeQuery = true,
+    )
+    fun findDiaryDays(
+        @Param("clientIds") clientIds: Array<UUID>,
+        @Param("from") from: LocalDate,
+        @Param("to") to: LocalDate,
+    ): List<ClientDiaryDay>
+
+    @Query(
+        value = """
+            select e.client_user_id as clientUserId,
+                   max(e.entry_date) as lastEntryDate
+            from training_log_entries e
+            where e.client_user_id = any (cast(:clientIds as uuid[]))
+            group by e.client_user_id
+        """,
+        nativeQuery = true,
+    )
+    fun findLastEntryDates(@Param("clientIds") clientIds: Array<UUID>): List<ClientLastEntry>
 }
 
 interface ExerciseBestVolume {

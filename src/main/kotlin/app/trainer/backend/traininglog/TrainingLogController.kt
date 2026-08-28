@@ -29,6 +29,15 @@ class TrainingLogController(private val trainingLogService: TrainingLogService) 
         )
     }
 
+    @GetMapping("/coach/clients/diary-summary")
+    fun diarySummary(
+        @CurrentUserId coachUserId: UUID,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
+    ): List<ClientDiarySummaryResponse> {
+        return trainingLogService.diarySummary(coachUserId = coachUserId, from = from, to = to)
+    }
+
     @PostMapping("/coach/exercises")
     fun createExercise(
         @CurrentUserId coachUserId: UUID,

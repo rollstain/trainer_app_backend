@@ -9,6 +9,7 @@ import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.config.pageSizeOf
+import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -25,6 +26,7 @@ class TrainingLogService(
     private val setRepository: TrainingLogSetRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
+    private val userRepository: UserRepository,
     private val clock: Clock,
 ) {
 
@@ -54,6 +56,36 @@ class TrainingLogService(
                 ?.takeIf { hasMore }
                 ?.let { encodeCursor(PageCursor(sortKey = it.name, id = it.id)) },
         )
+    }
+
+    @Transactional(readOnly = true)
+    fun diarySummary(coachUserId: UUID, from: LocalDate, to: LocalDate): List<ClientDiarySummaryResponse> {
+        val coach = coachRepository.findByUserId(coachUserId)
+            ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не тренер")
+        val links = coachClientRepository.findActiveOrdered(coachId = coach.id)
+        if (links.isEmpty()) return emptyList()
+
+        val clientIds = links.map { it.userId }.toTypedArray()
+        val usersById = userRepository.findAllById(clientIds.toList()).associateBy { it.id }
+        val daysByClient = entryRepository
+            .findDiaryDays(clientIds = clientIds, from = from, to = to)
+            .groupBy { it.getClientUserId() }
+        val lastEntryByClient = entryRepository
+            .findLastEntryDates(clientIds = clientIds)
+            .associate { it.getClientUserId() to it.getLastEntryDate() }
+
+        return links.mapNotNull { link ->
+            val user = usersById[link.userId] ?: return@mapNotNull null
+            ClientDiarySummaryResponse(
+                clientUserId = link.userId,
+                displayName = user.displayName,
+                linkedAt = link.createdAt,
+                lastEntryDate = lastEntryByClient[link.userId],
+                days = daysByClient[link.userId].orEmpty().map { day ->
+                    DiaryDayResponse(entryDate = day.getEntryDate(), volumeGrams = day.getVolumeGrams())
+                },
+            )
+        }
     }
 
     @Transactional
