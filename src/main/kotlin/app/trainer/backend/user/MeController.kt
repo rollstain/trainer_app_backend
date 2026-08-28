@@ -1,5 +1,7 @@
 package app.trainer.backend.user
 
+import app.trainer.backend.coach.CoachClientRepository
+import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
@@ -20,6 +22,7 @@ data class MeResponse(
     val email: String?,
     val coachId: UUID?,
     val zoneId: String?,
+    val hasCoach: Boolean,
 )
 
 data class UpdateContactRequest(
@@ -31,6 +34,7 @@ data class UpdateContactRequest(
 class MeController(
     private val userRepository: UserRepository,
     private val coachRepository: CoachRepository,
+    private val coachClientRepository: CoachClientRepository,
 ) {
 
     @PatchMapping("/me/contact")
@@ -79,6 +83,9 @@ class MeController(
             email = user.email,
             coachId = coach?.id,
             zoneId = coach?.zoneId,
+            hasCoach = coachClientRepository
+                .findByUserId(user.id)
+                .any { it.status == CoachClientStatus.ACTIVE },
         )
     }
 }
