@@ -9,6 +9,12 @@ data class InviteResponse(
     val expiresAt: Instant,
 )
 
+data class InvitePreviewResponse(
+    val coachDisplayName: String,
+    val expiresAt: Instant,
+    val needsDisplayName: Boolean,
+)
+
 data class RedeemInviteRequest(
     @field:NotBlank
     val code: String,

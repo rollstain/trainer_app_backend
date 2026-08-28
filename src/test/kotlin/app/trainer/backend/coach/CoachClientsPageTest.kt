@@ -53,12 +53,13 @@ class CoachClientsPageTest {
             limit = null,
             after = null,
             userIds = null,
+            query = null,
         )
 
         assertEquals(listOf("Анна", "Борис", "Вера"), page.items.map { it.displayName })
         assertNull(page.nextCursor, "без limit подкачивать нечего")
         verify(coachClientRepository, never())
-            .findActivePage(anyNonNull(), anyNonNull(), anyNonNull(), ArgumentMatchers.anyInt())
+            .findActivePage(anyNonNull(), anyNonNull(), anyNonNull(), anyNonNull(), ArgumentMatchers.anyInt())
     }
 
     @Test
@@ -74,6 +75,7 @@ class CoachClientsPageTest {
             limit = PAGE_SIZE,
             after = null,
             userIds = null,
+            query = null,
         )
 
         assertEquals(listOf("Анна", "Борис"), page.items.map { it.displayName }, "лишняя строка наружу не уходит")
@@ -92,6 +94,7 @@ class CoachClientsPageTest {
             limit = PAGE_SIZE,
             after = null,
             userIds = null,
+            query = null,
         )
 
         assertEquals(1, page.items.size)
@@ -112,12 +115,13 @@ class CoachClientsPageTest {
             limit = PAGE_SIZE,
             after = null,
             userIds = listOf(anna.userId, vera.userId),
+            query = null,
         )
 
         assertEquals(listOf("Анна", "Вера"), page.items.map { it.displayName })
         assertNull(page.nextCursor, "выборка по id не листается")
         verify(coachClientRepository, never())
-            .findActivePage(anyNonNull(), anyNonNull(), anyNonNull(), ArgumentMatchers.anyInt())
+            .findActivePage(anyNonNull(), anyNonNull(), anyNonNull(), anyNonNull(), ArgumentMatchers.anyInt())
     }
 
     private fun givenCoach() {
@@ -143,7 +147,13 @@ class CoachClientsPageTest {
 
     private fun givenPage(page: List<CoachClientEntity>) {
         `when`(
-            coachClientRepository.findActivePage(anyNonNull(), anyNonNull(), anyNonNull(), ArgumentMatchers.anyInt())
+            coachClientRepository.findActivePage(
+                anyNonNull(),
+                anyNonNull(),
+                anyNonNull(),
+                anyNonNull(),
+                ArgumentMatchers.anyInt(),
+            )
         ).thenReturn(page)
         givenUsersFor(page)
     }

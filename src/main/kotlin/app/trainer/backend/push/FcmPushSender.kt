@@ -26,7 +26,7 @@ class FcmPushSender(
             .findByUserIdIn(userIds)
             .groupBy { localeOfToken(it.locale) }
             .forEach { (locale, tokensOfLocale) ->
-                val rendered = pushTexts.render(text = message.text, locale = locale)
+                val rendered = pushTexts.render(text = message.text, args = message.args, locale = locale)
                 tokensOfLocale
                     .map { it.token }
                     .chunked(FCM_BATCH_LIMIT)

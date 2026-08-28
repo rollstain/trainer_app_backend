@@ -39,6 +39,7 @@ class CoachService(
         limit: Int?,
         after: String?,
         userIds: List<UUID>?,
+        query: String?,
     ): Page<CoachClientResponse> {
         val coach = requireCoach(coachUserId)
         val pageSize = if (userIds == null) pageSizeOf(limit) else null
@@ -50,6 +51,7 @@ class CoachService(
             val cursor = decodeCursor(after)
             coachClientRepository.findActivePage(
                 coachId = coach.id,
+                query = query?.trim()?.takeIf { it.isNotEmpty() },
                 afterName = cursor?.sortKey,
                 afterId = cursor?.id,
                 pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,

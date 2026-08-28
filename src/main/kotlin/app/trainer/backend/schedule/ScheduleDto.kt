@@ -58,6 +58,14 @@ data class AssignSlotRequest(val clientUserId: UUID)
 data class SlotParticipantResponse(
     val userId: UUID,
     val displayName: String?,
+    val bookedAt: Instant,
+    val hasMedicalNotes: Boolean,
+)
+
+data class SlotWaitlistResponse(
+    val userId: UUID,
+    val displayName: String?,
+    val joinedAt: Instant,
 )
 
 data class CoachSlotResponse(
@@ -71,6 +79,7 @@ data class CoachSlotResponse(
     val capacity: Int,
     val takenSeats: Int,
     val participants: List<SlotParticipantResponse>,
+    val waitlist: List<SlotWaitlistResponse>,
 )
 
 data class ClientSlotResponse(

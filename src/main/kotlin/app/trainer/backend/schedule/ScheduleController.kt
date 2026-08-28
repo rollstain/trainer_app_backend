@@ -53,6 +53,11 @@ class ScheduleController(private val scheduleService: ScheduleService) {
         return scheduleService.clientSchedule(userId = userId, coachId = coachId, from = from, to = to)
     }
 
+    @GetMapping("/slots/{slotId}")
+    fun coachSlot(@CurrentUserId coachUserId: UUID, @PathVariable slotId: UUID): CoachSlotResponse {
+        return scheduleService.coachSlot(coachUserId = coachUserId, slotId = slotId)
+    }
+
     @PostMapping("/slots/{slotId}/assign")
     fun assignSlot(
         @CurrentUserId coachUserId: UUID,

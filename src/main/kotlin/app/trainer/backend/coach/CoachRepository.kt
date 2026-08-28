@@ -21,6 +21,10 @@ interface CoachClientRepository : JpaRepository<CoachClientEntity, UUID> {
             where cc.coach_id = cast(:coachId as uuid)
               and cc.status = 'ACTIVE'
               and (
+                cast(:query as text) is null
+                or u.display_name ilike '%' || cast(:query as text) || '%'
+              )
+              and (
                 cast(:afterName as text) is null
                 or (u.display_name, cc.user_id) > (cast(:afterName as text), cast(:afterId as uuid))
               )
@@ -31,6 +35,7 @@ interface CoachClientRepository : JpaRepository<CoachClientEntity, UUID> {
     )
     fun findActivePage(
         @Param("coachId") coachId: UUID,
+        @Param("query") query: String?,
         @Param("afterName") afterName: String?,
         @Param("afterId") afterId: UUID?,
         @Param("pageSize") pageSize: Int,

@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val HISTORY_PAGE_SIZE = 50
+private const val PUSH_BODY_MAX_LENGTH = 120
 private const val PUSH_DIALOG_ID_KEY = "dialogId"
 
 @Service
@@ -75,7 +76,11 @@ class ChatService(
             MessageSentEvent(
                 message = response,
                 recipientUserIds = participantsOf(dialog) - senderUserId,
-                push = newMessagePush(dialogId),
+                push = newMessagePush(
+                    dialogId = dialogId,
+                    senderDisplayName = userRepository.findByIdOrNull(senderUserId)?.displayName.orEmpty(),
+                    body = request.body,
+                ),
             )
         )
         return response
@@ -235,9 +240,14 @@ class ChatService(
         return setOf(coach.userId, dialog.clientUserId)
     }
 
-    private fun newMessagePush(dialogId: UUID): PushMessage = PushMessage(
+    private fun newMessagePush(
+        dialogId: UUID,
+        senderDisplayName: String,
+        body: String?,
+    ): PushMessage = PushMessage(
         channel = PushChannel.CHAT,
         text = PushText.NEW_CHAT_MESSAGE,
+        args = listOf(senderDisplayName, body.orEmpty().take(PUSH_BODY_MAX_LENGTH)),
         data = mapOf(PUSH_DIALOG_ID_KEY to dialogId.toString()),
     )
 

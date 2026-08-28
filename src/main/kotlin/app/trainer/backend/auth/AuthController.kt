@@ -24,6 +24,11 @@ class AuthController(
         return authService.createInvite(coachUserId = coachUserId)
     }
 
+    @GetMapping("/invites/{code}")
+    fun previewInvite(@PathVariable code: String): InvitePreviewResponse {
+        return authService.previewInvite(code = code)
+    }
+
     @PostMapping("/invites/redeem")
     fun redeemInvite(@Valid @RequestBody request: RedeemInviteRequest): AuthTokensResponse {
         return authService.redeemInvite(request = request)

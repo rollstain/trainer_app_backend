@@ -9,6 +9,7 @@ import org.springframework.context.support.ResourceBundleMessageSource
 private const val MESSAGES_BASENAME = "messages"
 private const val MESSAGES_ENCODING = "UTF-8"
 private val ENGLISH: Locale = Locale.forLanguageTag("en")
+private val SAMPLE_ARGS = listOf("18:00", "Дмитрием Роговым")
 
 class PushTextsTest {
 
@@ -23,8 +24,8 @@ class PushTextsTest {
     @Test
     fun `every push has a text in both languages`() {
         PushText.entries.forEach { text ->
-            val russian = pushTexts.render(text = text, locale = DEFAULT_PUSH_LOCALE)
-            val english = pushTexts.render(text = text, locale = ENGLISH)
+            val russian = pushTexts.render(text = text, args = SAMPLE_ARGS, locale = DEFAULT_PUSH_LOCALE)
+            val english = pushTexts.render(text = text, args = SAMPLE_ARGS, locale = ENGLISH)
 
             assertTrue(russian.title.isNotBlank(), "нет русского заголовка для $text")
             assertTrue(russian.body.isNotBlank(), "нет русского текста для $text")
@@ -34,9 +35,13 @@ class PushTextsTest {
     }
 
     @Test
-    fun `a session reminder speaks the language of the device`() {
-        assertEquals("Скоро тренировка", pushTexts.render(PushText.SESSION_SOON, DEFAULT_PUSH_LOCALE).title)
-        assertEquals("Session coming up", pushTexts.render(PushText.SESSION_SOON, ENGLISH).title)
+    fun `a session reminder speaks the language of the device and names the hour`() {
+        val russian = pushTexts.render(PushText.SESSION_SOON, SAMPLE_ARGS, DEFAULT_PUSH_LOCALE)
+        val english = pushTexts.render(PushText.SESSION_SOON, SAMPLE_ARGS, ENGLISH)
+
+        assertEquals("Тренировка в 18:00", russian.title)
+        assertEquals("Session at 18:00", english.title)
+        assertTrue(russian.body.contains("Дмитрием"), "в тексте нет имени: ${'$'}{russian.body}")
     }
 
     @Test

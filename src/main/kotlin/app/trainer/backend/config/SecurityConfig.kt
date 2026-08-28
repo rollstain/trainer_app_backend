@@ -8,6 +8,7 @@ import javax.crypto.spec.SecretKeySpec
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
@@ -45,6 +46,7 @@ class SecurityConfig(private val properties: AuthProperties) {
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
+                it.requestMatchers(HttpMethod.GET, "/auth/invites/*").permitAll()
                 it.requestMatchers("/auth/invites/redeem", "/auth/refresh", "/auth/external").permitAll()
                 it.requestMatchers("/admin/**").permitAll()
                 it.requestMatchers("/ws/**").permitAll()

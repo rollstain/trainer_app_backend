@@ -18,6 +18,7 @@ enum class PushText(val titleKey: String, val bodyKey: String) {
 data class PushMessage(
     val channel: PushChannel,
     val text: PushText,
+    val args: List<String>,
     val data: Map<String, String>,
 )
 

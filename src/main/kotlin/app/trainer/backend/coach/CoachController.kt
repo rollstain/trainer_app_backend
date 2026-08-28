@@ -24,6 +24,7 @@ class CoachController(private val coachService: CoachService) {
         @RequestParam(required = false) limit: Int?,
         @RequestParam(required = false) after: String?,
         @RequestParam(required = false) ids: List<UUID>?,
+        @RequestParam(required = false) query: String?,
     ): ResponseEntity<List<CoachClientResponse>> {
         return pageResponse(
             coachService.clientsOfCoach(
@@ -31,6 +32,7 @@ class CoachController(private val coachService: CoachService) {
                 limit = limit,
                 after = after,
                 userIds = ids?.takeIf { it.isNotEmpty() },
+                query = query,
             )
         )
     }

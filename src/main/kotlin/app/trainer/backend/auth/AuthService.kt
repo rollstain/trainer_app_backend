@@ -48,6 +48,22 @@ class AuthService(
         return InviteResponse(code = invite.code, expiresAt = invite.expiresAt)
     }
 
+    @Transactional(readOnly = true)
+    fun previewInvite(code: String): InvitePreviewResponse {
+        val invite = requireUsableInvite(code = code, now = Instant.now(clock))
+        val coach = coachRepository.findById(invite.coachId).orElseThrow {
+            ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
+        }
+        val coachUser = userRepository.findById(coach.userId).orElseThrow {
+            ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
+        }
+        return InvitePreviewResponse(
+            coachDisplayName = coachUser.displayName,
+            expiresAt = invite.expiresAt,
+            needsDisplayName = invite.targetUserId == null,
+        )
+    }
+
     @Transactional
     fun redeemInvite(request: RedeemInviteRequest): AuthTokensResponse {
         val now = Instant.now(clock)

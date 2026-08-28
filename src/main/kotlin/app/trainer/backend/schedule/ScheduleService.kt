@@ -13,6 +13,8 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val PUSH_SLOT_ID_KEY = "slotId"
+private val WAITLIST_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 private const val PERSONAL_SLOT_CAPACITY = 1
 private const val MISSED_SESSIONS_WINDOW_DAYS = 30L
 
@@ -33,6 +36,7 @@ class ScheduleService(
     private val coachClientRepository: CoachClientRepository,
     private val userRepository: UserRepository,
     private val waitlistRepository: SlotWaitlistRepository,
+    private val roster: SlotRoster,
     private val participantRepository: SlotParticipantRepository,
     private val pushSender: PushSender,
     private val clock: Clock,
@@ -113,7 +117,8 @@ class ScheduleService(
             to = to,
         )
         val pendingBySlot = pendingRequestIdsFor(slots)
-        val participantsBySlot = participantsOf(slots)
+        val participantsBySlot = roster.participantsOf(slots)
+        val waitlistBySlot = roster.waitlistOf(slots)
         return CoachScheduleResponse(
             coachId = coach.id,
             zoneId = coach.zoneId,
@@ -122,9 +127,18 @@ class ScheduleService(
                     slot = slot,
                     pendingRequestId = pendingBySlot[slot.id],
                     participants = participantsBySlot[slot.id].orEmpty(),
+                    waitlist = waitlistBySlot[slot.id].orEmpty(),
                 )
             },
         )
+    }
+
+    @Transactional(readOnly = true)
+    fun coachSlot(coachUserId: UUID, slotId: UUID): CoachSlotResponse {
+        val coach = requireCoach(coachUserId)
+        val slot = slotRepository.findByIdOrNull(slotId) ?: slotNotFound()
+        requireSlotOwnedBy(slot = slot, coach = coach)
+        return toCoachResponse(slot = slot, pendingRequestId = pendingRequestIdsFor(listOf(slot))[slot.id])
     }
 
     @Transactional(readOnly = true)
@@ -293,6 +307,12 @@ class ScheduleService(
         )
     }
 
+    private fun waitlistTimeLabelOf(slot: TrainingSlotEntity): String {
+        val coach = coachRepository.findByIdOrNull(slot.coachId)
+        val zone = coach?.zoneId?.let { zoneId -> runCatching { ZoneId.of(zoneId) }.getOrNull() } ?: ZoneOffset.UTC
+        return slot.startsAt.atZone(zone).format(WAITLIST_TIME_FORMAT)
+    }
+
     private fun notifyWaitlist(slot: TrainingSlotEntity) {
         val waiting = waitlistRepository.findBySlotIdOrderByCreatedAtAsc(slot.id)
         if (waiting.isEmpty()) return
@@ -303,6 +323,7 @@ class ScheduleService(
             message = PushMessage(
                 channel = PushChannel.SCHEDULE,
                 text = PushText.WAITLIST_SLOT_FREED,
+                args = listOf(waitlistTimeLabelOf(slot)),
                 data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
             ),
         )
@@ -531,7 +552,8 @@ class ScheduleService(
     private fun toCoachResponse(
         slot: TrainingSlotEntity,
         pendingRequestId: UUID?,
-        participants: List<SlotParticipantResponse> = participantsOf(slot.id),
+        participants: List<SlotParticipantResponse> = roster.participantsOf(slot),
+        waitlist: List<SlotWaitlistResponse> = roster.waitlistOf(slot.id),
     ): CoachSlotResponse {
         val soleParticipant = participants.singleOrNull()
         return CoachSlotResponse(
@@ -545,33 +567,14 @@ class ScheduleService(
             capacity = slot.capacity,
             takenSeats = participants.size,
             participants = participants,
+            waitlist = waitlist,
         )
-    }
-
-    private fun participantsOf(slots: List<TrainingSlotEntity>): Map<UUID, List<SlotParticipantResponse>> {
-        val participants = participantRepository.findBySlotIdIn(slots.map { it.id })
-        val names = namesOf(participants.map { it.userId })
-        return participants
-            .groupBy { it.slotId }
-            .mapValues { (_, rows) ->
-                rows.map { SlotParticipantResponse(userId = it.userId, displayName = names[it.userId]) }
-            }
     }
 
     private fun seatsTakenIn(slots: List<TrainingSlotEntity>): Map<UUID, Int> = participantRepository
         .findBySlotIdIn(slots.map { it.id })
         .groupingBy { it.slotId }
         .eachCount()
-
-    private fun participantsOf(slotId: UUID): List<SlotParticipantResponse> {
-        val participants = participantRepository.findBySlotId(slotId)
-        val names = namesOf(participants.map { it.userId })
-        return participants.map { SlotParticipantResponse(userId = it.userId, displayName = names[it.userId]) }
-    }
-
-    private fun namesOf(userIds: List<UUID>): Map<UUID, String> = userRepository
-        .findAllById(userIds.distinct())
-        .associate { it.id to it.displayName }
 
     private fun toClientResponse(
         slot: TrainingSlotEntity,

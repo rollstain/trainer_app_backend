@@ -14,6 +14,7 @@ import app.trainer.backend.schedule.TrainingSlotEntity
 import app.trainer.backend.schedule.TrainingSlotRepository
 import app.trainer.backend.traininglog.TrainingLogEntryEntity
 import app.trainer.backend.traininglog.TrainingLogEntryRepository
+import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -34,6 +35,7 @@ private val SLOT_ID: UUID = UUID.fromString("30000000-0000-0000-0000-00000000000
 
 private val MOSCOW_TEN_IN_THE_MORNING: Instant = Instant.parse("2026-03-02T07:00:00Z")
 private val MOSCOW_ELEVEN_AT_NIGHT: Instant = Instant.parse("2026-03-02T20:00:00Z")
+private val MOSCOW_SIX_IN_THE_MORNING: Instant = Instant.parse("2026-03-02T03:00:00Z")
 private const val COACH_ZONE = "Europe/Moscow"
 private const val DEFAULT_REMINDER_HOUR = 10
 private const val LATE_REMINDER_HOUR = 23
@@ -56,6 +58,7 @@ class ReminderServiceTest {
     private val coachClientRepository = mock(CoachClientRepository::class.java)
     private val reminderLogRepository = mock(ReminderLogRepository::class.java)
     private val participantRepository = mock(SlotParticipantRepository::class.java)
+    private val userRepository = mock(UserRepository::class.java)
     private val pushSender = mock(PushSender::class.java)
 
     @Test
@@ -194,6 +197,19 @@ class ReminderServiceTest {
         assertEquals(1, sent)
     }
 
+    @Test
+    fun `a session that starts inside the quiet hours is not pushed at night`() {
+        val service = serviceAt(MOSCOW_SIX_IN_THE_MORNING)
+        `when`(slotRepository.findByStartsAtBetweenOrderByStartsAtAsc(anyNonNull(), anyNonNull()))
+            .thenReturn(listOf(slot(startsAt = MOSCOW_SIX_IN_THE_MORNING.plusSeconds(AN_HOUR_IN_SECONDS))))
+        `when`(coachRepository.findAllById(eqNonNull(listOf(COACH_ID)))).thenReturn(listOf(coach()))
+
+        val sent = service.remindAboutSessions()
+
+        assertEquals(0, sent, "в тихие часы напоминание о тренировке не уходит")
+        verify(pushSender, never()).send(anyNonNull(), anyNonNull())
+    }
+
     private fun serviceAt(now: Instant): ReminderService = ReminderService(
         slotRepository = slotRepository,
         entryRepository = entryRepository,
@@ -201,6 +217,7 @@ class ReminderServiceTest {
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
         participantRepository = participantRepository,
+        userRepository = userRepository,
         reminderLogRepository = reminderLogRepository,
         pushSender = pushSender,
         clock = Clock.fixed(now, ZoneOffset.UTC),
@@ -251,10 +268,11 @@ class ReminderServiceTest {
 
     private fun slot(
         lifecycle: SlotLifecycle = SlotLifecycle.SCHEDULED,
+        startsAt: Instant = MOSCOW_TEN_IN_THE_MORNING.plusSeconds(AN_HOUR_IN_SECONDS),
     ): TrainingSlotEntity = TrainingSlotEntity(
         id = SLOT_ID,
         coachId = COACH_ID,
-        startsAt = MOSCOW_TEN_IN_THE_MORNING.plusSeconds(AN_HOUR_IN_SECONDS),
+        startsAt = startsAt,
         durationMinutes = SLOT_DURATION_MINUTES,
         capacity = SINGLE_SEAT,
         lifecycle = lifecycle,

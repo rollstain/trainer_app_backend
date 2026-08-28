@@ -48,6 +48,7 @@ class MissedSessionsTest {
     private val coachClientRepository = mock(CoachClientRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
     private val waitlistRepository = mock(SlotWaitlistRepository::class.java)
+    private val roster = mock(SlotRoster::class.java)
     private val participantRepository = mock(SlotParticipantRepository::class.java)
     private val pushSender = mock(PushSender::class.java)
 
@@ -58,6 +59,7 @@ class MissedSessionsTest {
         coachClientRepository = coachClientRepository,
         userRepository = userRepository,
         waitlistRepository = waitlistRepository,
+        roster = roster,
         participantRepository = participantRepository,
         pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),

@@ -13,10 +13,12 @@ import app.trainer.backend.schedule.SlotLifecycle
 import app.trainer.backend.schedule.SlotParticipantRepository
 import app.trainer.backend.schedule.TrainingSlotRepository
 import app.trainer.backend.traininglog.TrainingLogEntryRepository
+import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.time.temporal.WeekFields
 import java.util.UUID
@@ -30,6 +32,11 @@ private const val CHECK_IN_IDLE_DAYS = 14L
 private const val ENGAGEMENT_LOOKBACK_DAYS = 120L
 
 private const val PUSH_SLOT_ID_KEY = "slotId"
+private const val QUIET_HOURS_FROM = 22
+private const val QUIET_HOURS_UNTIL = 8
+private const val PERSONAL_SESSION_PARTICIPANTS = 1
+private val SESSION_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+private val CHECK_IN_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")
 
 @Service
 class ReminderService(
@@ -39,6 +46,7 @@ class ReminderService(
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
     private val participantRepository: SlotParticipantRepository,
+    private val userRepository: UserRepository,
     private val reminderLogRepository: ReminderLogRepository,
     private val pushSender: PushSender,
     private val clock: Clock,
@@ -54,27 +62,72 @@ class ReminderService(
             .filter { it.lifecycle == SlotLifecycle.SCHEDULED }
         if (upcoming.isEmpty()) return 0
 
-        val remindingCoachIds = coachRepository
+        val remindingCoaches = coachRepository
             .findAllById(upcoming.map { it.coachId }.distinct())
             .filter { it.sessionRemindersEnabled }
-            .map { it.id }
-            .toSet()
-        val remindedSlotIds = upcoming.filter { remindingCoachIds.contains(it.coachId) }.map { it.id }
-        if (remindedSlotIds.isEmpty()) return 0
-        return participantRepository
-            .findBySlotIdIn(remindedSlotIds)
-            .count { participation ->
-                send(
-                    userId = participation.userId,
-                    kind = ReminderKind.SESSION,
-                    subject = participation.slotId.toString(),
-                    message = PushMessage(
-                        channel = PushChannel.SCHEDULE,
-                        text = PushText.SESSION_SOON,
-                        data = mapOf(PUSH_SLOT_ID_KEY to participation.slotId.toString()),
+            .associateBy { it.id }
+        val reminded = upcoming.filter { slot ->
+            val coach = remindingCoaches[slot.coachId] ?: return@filter false
+            !isQuietHourFor(coach = coach, startsAt = slot.startsAt)
+        }
+        if (reminded.isEmpty()) return 0
+        val slotsById = reminded.associateBy { it.id }
+        val participation = participantRepository.findBySlotIdIn(reminded.map { it.id })
+        val coachUserIds = remindingCoaches.values.map { it.userId }
+        val namesByUserId = userRepository
+            .findAllById((participation.map { it.userId } + coachUserIds).distinct())
+            .associate { it.id to it.displayName }
+        val participantsBySlot = participation.groupBy { it.slotId }
+        return participation.count { participant ->
+            val slot = slotsById[participant.slotId] ?: return@count false
+            val coach = remindingCoaches[slot.coachId] ?: return@count false
+            val zone = zoneOf(coach) ?: return@count false
+            send(
+                userId = participant.userId,
+                kind = ReminderKind.SESSION,
+                subject = participant.slotId.toString(),
+                message = PushMessage(
+                    channel = PushChannel.SCHEDULE,
+                    text = PushText.SESSION_SOON,
+                    args = sessionArgsOf(
+                        startsAt = slot.startsAt,
+                        zone = zone,
+                        coachUserId = coach.userId,
+                        recipientUserId = participant.userId,
+                        participants = participantsBySlot[participant.slotId].orEmpty().map { it.userId },
+                        namesByUserId = namesByUserId,
                     ),
-                )
-            }
+                    data = mapOf(PUSH_SLOT_ID_KEY to participant.slotId.toString()),
+                ),
+            )
+        }
+    }
+
+    private fun sessionArgsOf(
+        startsAt: Instant,
+        zone: ZoneId,
+        coachUserId: UUID,
+        recipientUserId: UUID,
+        participants: List<UUID>,
+        namesByUserId: Map<UUID, String>,
+    ): List<String> {
+        val timeLabel = startsAt.atZone(zone).format(SESSION_TIME_FORMAT)
+        val companion = when {
+            participants.size > PERSONAL_SESSION_PARTICIPANTS -> participants.size.toString()
+            recipientUserId == coachUserId ->
+                participants.firstOrNull { it != coachUserId }?.let { namesByUserId[it] }.orEmpty()
+            else -> namesByUserId[coachUserId].orEmpty()
+        }
+        return listOf(timeLabel, companion)
+    }
+
+    private fun zoneOf(coach: CoachEntity): ZoneId? =
+        runCatching { ZoneId.of(coach.zoneId) }.getOrNull()
+
+    private fun isQuietHourFor(coach: CoachEntity, startsAt: Instant): Boolean {
+        val zone = zoneOf(coach) ?: return false
+        val hour = startsAt.minus(SESSION_REMINDER_LEAD_MINUTES, ChronoUnit.MINUTES).atZone(zone).hour
+        return hour >= QUIET_HOURS_FROM || hour < QUIET_HOURS_UNTIL
     }
 
     @Transactional
@@ -122,6 +175,7 @@ class ReminderService(
             message = PushMessage(
                 channel = PushChannel.SCHEDULE,
                 text = PushText.DIARY_IDLE,
+                args = listOf(daysSinceLabelOf(lastEntry = lastEntry, today = today)),
                 data = emptyMap(),
             ),
         )
@@ -144,9 +198,15 @@ class ReminderService(
             message = PushMessage(
                 channel = PushChannel.SCHEDULE,
                 text = PushText.CHECK_IN_IDLE,
+                args = listOf(lastCheckIn?.format(CHECK_IN_DATE_FORMAT).orEmpty()),
                 data = emptyMap(),
             ),
         )
+    }
+
+    private fun daysSinceLabelOf(lastEntry: LocalDate?, today: LocalDate): String {
+        if (lastEntry == null) return ChronoUnit.DAYS.between(today.minusDays(DIARY_IDLE_DAYS), today).toString()
+        return ChronoUnit.DAYS.between(lastEntry, today).toString()
     }
 
     private fun send(

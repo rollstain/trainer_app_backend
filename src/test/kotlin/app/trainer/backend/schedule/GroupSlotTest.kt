@@ -51,6 +51,7 @@ class GroupSlotTest {
     private val coachClientRepository = mock(CoachClientRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
     private val waitlistRepository = mock(SlotWaitlistRepository::class.java)
+    private val roster = mock(SlotRoster::class.java)
     private val participantRepository = mock(SlotParticipantRepository::class.java)
     private val pushSender = mock(PushSender::class.java)
 
@@ -61,6 +62,7 @@ class GroupSlotTest {
         coachClientRepository = coachClientRepository,
         userRepository = userRepository,
         waitlistRepository = waitlistRepository,
+        roster = roster,
         participantRepository = participantRepository,
         pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
@@ -222,8 +224,9 @@ class GroupSlotTest {
             )
         ).thenReturn(listOf(slot))
         `when`(changeRequestRepository.findBySlotIdInAndStatus(anyNonNull(), anyNonNull())).thenReturn(emptyList())
-        `when`(participantRepository.findBySlotIdIn(anyNonNull())).thenReturn(listOf(participation(FIRST_CLIENT)))
-        `when`(userRepository.findAllById(anyNonNull())).thenReturn(listOf(user(FIRST_CLIENT)))
+        `when`(roster.participantsOf(anyNonNull<List<TrainingSlotEntity>>()))
+            .thenReturn(mapOf(slot.id to listOf(bookedSeat(FIRST_CLIENT))))
+        `when`(roster.waitlistOf(anyNonNull<List<TrainingSlotEntity>>())).thenReturn(emptyMap())
 
         val schedule = service.coachSchedule(coachUserId = COACH_USER_ID, from = NOW, to = SLOT_STARTS_AT)
 
@@ -295,6 +298,13 @@ class GroupSlotTest {
         capacity = capacity,
         lifecycle = SlotLifecycle.SCHEDULED,
         createdAt = NOW,
+    )
+
+    private fun bookedSeat(userId: UUID): SlotParticipantResponse = SlotParticipantResponse(
+        userId = userId,
+        displayName = user(userId).displayName,
+        bookedAt = NOW,
+        hasMedicalNotes = false,
     )
 
     private fun participation(userId: UUID): SlotParticipantEntity = SlotParticipantEntity(
