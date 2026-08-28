@@ -1,10 +1,12 @@
 package app.trainer.backend.traininglog
 
 import app.trainer.backend.config.CurrentUserId
+import app.trainer.backend.config.pageResponse
 import jakarta.validation.Valid
 import java.time.LocalDate
 import java.util.UUID
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -17,8 +19,14 @@ import org.springframework.web.bind.annotation.RestController
 class TrainingLogController(private val trainingLogService: TrainingLogService) {
 
     @GetMapping("/exercises")
-    fun exercises(@CurrentUserId userId: UUID): List<ExerciseResponse> {
-        return trainingLogService.availableExercises(userId = userId)
+    fun exercises(
+        @CurrentUserId userId: UUID,
+        @RequestParam(required = false) limit: Int?,
+        @RequestParam(required = false) after: String?,
+    ): ResponseEntity<List<ExerciseResponse>> {
+        return pageResponse(
+            trainingLogService.availableExercises(userId = userId, limit = limit, after = after)
+        )
     }
 
     @PostMapping("/coach/exercises")

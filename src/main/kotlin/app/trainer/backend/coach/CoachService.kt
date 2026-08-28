@@ -2,6 +2,12 @@ package app.trainer.backend.coach
 
 import app.trainer.backend.clientnotes.ClientNoteKind
 import app.trainer.backend.clientnotes.ClientNoteRepository
+import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
+import app.trainer.backend.config.Page
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.config.encodeCursor
+import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.schedule.ScheduleService
 import app.trainer.backend.user.UserRepository
 import java.util.UUID
@@ -21,23 +27,46 @@ class CoachService(
 ) {
 
     @Transactional(readOnly = true)
-    fun clientsOfCoach(coachUserId: UUID): List<CoachClientResponse> {
+    fun clientsOfCoach(coachUserId: UUID, limit: Int?, after: String?): Page<CoachClientResponse> {
         val coach = requireCoach(coachUserId)
+        val pageSize = pageSizeOf(limit)
+        val fetched = if (pageSize == null) {
+            coachClientRepository.findActiveOrdered(coachId = coach.id)
+        } else {
+            val cursor = decodeCursor(after)
+            coachClientRepository.findActivePage(
+                coachId = coach.id,
+                afterName = cursor?.sortKey,
+                afterId = cursor?.id,
+                pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
+            )
+        }
+        val links = if (pageSize == null) fetched else fetched.take(pageSize)
+        val hasMore = pageSize != null && fetched.size > pageSize
         val withMedicalNotes = clientNoteRepository
             .findClientUserIdsWithKind(coachId = coach.id, kind = ClientNoteKind.MEDICAL)
             .toSet()
-        return coachClientRepository
-            .findByCoachIdAndStatus(coachId = coach.id, status = CoachClientStatus.ACTIVE)
-            .mapNotNull { link ->
-                val user = userRepository.findByIdOrNull(link.userId) ?: return@mapNotNull null
-                CoachClientResponse(
-                    userId = user.id,
-                    displayName = user.displayName,
-                    status = link.status,
-                    hasMedicalNotes = user.id in withMedicalNotes,
-                    linkedAt = link.createdAt,
-                )
-            }
+        val usersById = userRepository.findAllById(links.map { it.userId }).associateBy { it.id }
+        val items = links.mapNotNull { link ->
+            val user = usersById[link.userId] ?: return@mapNotNull null
+            CoachClientResponse(
+                userId = user.id,
+                displayName = user.displayName,
+                status = link.status,
+                hasMedicalNotes = user.id in withMedicalNotes,
+                linkedAt = link.createdAt,
+            )
+        }
+        val lastLink = links.lastOrNull()?.takeIf { hasMore }
+        val lastName = lastLink?.let { usersById[it.userId]?.displayName }
+        return Page(
+            items = items,
+            nextCursor = if (lastLink == null || lastName == null) {
+                null
+            } else {
+                encodeCursor(PageCursor(sortKey = lastName, id = lastLink.userId))
+            },
+        )
     }
 
     @Transactional(readOnly = true)

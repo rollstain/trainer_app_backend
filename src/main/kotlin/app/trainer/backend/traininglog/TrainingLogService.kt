@@ -3,6 +3,12 @@ package app.trainer.backend.traininglog
 import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
+import app.trainer.backend.config.Page
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.config.encodeCursor
+import app.trainer.backend.config.pageSizeOf
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -23,12 +29,31 @@ class TrainingLogService(
 ) {
 
     @Transactional(readOnly = true)
-    fun availableExercises(userId: UUID): List<ExerciseResponse> {
-        val coachIds = coachIdsVisibleTo(userId)
+    fun availableExercises(userId: UUID, limit: Int?, after: String?): Page<ExerciseResponse> {
+        val coachIds = coachIdsVisibleTo(userId).toTypedArray()
+        val pageSize = pageSizeOf(limit)
+        val fetched = if (pageSize == null) {
+            exerciseRepository.findAvailable(coachIds)
+        } else {
+            val cursor = decodeCursor(after)
+            exerciseRepository.findAvailablePage(
+                coachIds = coachIds,
+                afterName = cursor?.sortKey,
+                afterId = cursor?.id,
+                pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
+            )
+        }
+        val exercises = if (pageSize == null) fetched else fetched.take(pageSize)
+        val hasMore = pageSize != null && fetched.size > pageSize
         val latestByExercise = setRepository.findLatestPerExercise(userId).associateBy { it.exerciseId }
-        return exerciseRepository
-            .findAvailable(coachIds.toTypedArray())
-            .map { exercise -> toResponse(exercise = exercise, latest = latestByExercise[exercise.id]) }
+        return Page(
+            items = exercises.map { exercise ->
+                toResponse(exercise = exercise, latest = latestByExercise[exercise.id])
+            },
+            nextCursor = exercises.lastOrNull()
+                ?.takeIf { hasMore }
+                ?.let { encodeCursor(PageCursor(sortKey = it.name, id = it.id)) },
+        )
     }
 
     @Transactional

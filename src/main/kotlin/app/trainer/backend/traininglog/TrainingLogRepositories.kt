@@ -19,6 +19,27 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
     )
     fun findAvailable(@Param("coachIds") coachIds: Array<UUID>): List<ExerciseEntity>
 
+    @Query(
+        value = """
+            select e.* from exercises e
+            where e.archived_at is null
+              and (e.coach_id is null or e.coach_id = any (cast(:coachIds as uuid[])))
+              and (
+                cast(:afterName as text) is null
+                or (e.name, e.id) > (cast(:afterName as text), cast(:afterId as uuid))
+              )
+            order by e.name, e.id
+            limit :pageSize
+        """,
+        nativeQuery = true,
+    )
+    fun findAvailablePage(
+        @Param("coachIds") coachIds: Array<UUID>,
+        @Param("afterName") afterName: String?,
+        @Param("afterId") afterId: UUID?,
+        @Param("pageSize") pageSize: Int,
+    ): List<ExerciseEntity>
+
     fun findByCoachIdAndArchivedAtIsNull(coachId: UUID): List<ExerciseEntity>
 }
 
