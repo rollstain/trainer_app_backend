@@ -1,6 +1,7 @@
 package app.trainer.backend.config
 
 import app.trainer.backend.auth.AuthProperties
+import app.trainer.backend.auth.external.ExternalAuthProperties
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import javax.crypto.spec.SecretKeySpec
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -19,7 +20,7 @@ private const val JWT_SECRET_MIN_LENGTH = 32
 private const val HMAC_ALGORITHM = "HmacSHA256"
 
 @Configuration
-@EnableConfigurationProperties(AuthProperties::class)
+@EnableConfigurationProperties(AuthProperties::class, ExternalAuthProperties::class)
 class SecurityConfig(private val properties: AuthProperties) {
 
     private val secretKey = SecretKeySpec(requireStrongSecret().toByteArray(), HMAC_ALGORITHM)
@@ -39,7 +40,7 @@ class SecurityConfig(private val properties: AuthProperties) {
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
-                it.requestMatchers("/auth/invites/redeem", "/auth/refresh").permitAll()
+                it.requestMatchers("/auth/invites/redeem", "/auth/refresh", "/auth/external").permitAll()
                 it.requestMatchers("/admin/**").permitAll()
                 it.requestMatchers("/ws/**").permitAll()
                 it.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
