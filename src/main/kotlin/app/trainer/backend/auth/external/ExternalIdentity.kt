@@ -10,7 +10,7 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
 
-enum class ExternalProvider { YANDEX, VK, APPLE, GOOGLE }
+enum class ExternalProvider { YANDEX, VK, APPLE, GOOGLE, TELEGRAM }
 
 data class VerifiedIdentity(
     val provider: ExternalProvider,

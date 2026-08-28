@@ -2,6 +2,7 @@ package app.trainer.backend.config
 
 import app.trainer.backend.auth.AuthProperties
 import app.trainer.backend.auth.external.ExternalAuthProperties
+import app.trainer.backend.auth.external.TelegramProperties
 import app.trainer.backend.link.InviteLinkProperties
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import javax.crypto.spec.SecretKeySpec
@@ -25,6 +26,7 @@ private const val HMAC_ALGORITHM = "HmacSHA256"
 @EnableConfigurationProperties(
     AuthProperties::class,
     ExternalAuthProperties::class,
+    TelegramProperties::class,
     InviteLinkProperties::class,
 )
 class SecurityConfig(private val properties: AuthProperties) {
@@ -48,6 +50,8 @@ class SecurityConfig(private val properties: AuthProperties) {
             .authorizeHttpRequests {
                 it.requestMatchers(HttpMethod.GET, "/auth/invites/*").permitAll()
                 it.requestMatchers("/auth/invites/redeem", "/auth/refresh", "/auth/external").permitAll()
+                it.requestMatchers("/auth/providers").permitAll()
+                it.requestMatchers("/auth/telegram/start", "/auth/telegram/confirm").permitAll()
                 it.requestMatchers("/admin/**").permitAll()
                 it.requestMatchers("/ws/**").permitAll()
                 it.requestMatchers("/i/*", "/.well-known/**").permitAll()

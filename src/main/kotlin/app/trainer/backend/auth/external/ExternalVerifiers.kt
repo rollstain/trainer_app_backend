@@ -18,6 +18,12 @@ private const val APPLE_ISSUER = "https://appleid.apple.com"
 private const val GOOGLE_ISSUER = "https://accounts.google.com"
 private const val NAME_SEPARATOR = " "
 
+@ConfigurationProperties(prefix = "trainer.telegram")
+data class TelegramProperties(
+    val botUsername: String,
+    val botSecret: String,
+)
+
 @ConfigurationProperties(prefix = "trainer.auth.external")
 data class ExternalAuthProperties(
     val vkClientId: String,
@@ -139,4 +145,14 @@ class GoogleIdentityVerifier(
     override val provider = ExternalProvider.GOOGLE
 
     override val audience: String get() = properties.googleClientId
+}
+
+@Component
+class TelegramIdentityVerifier(
+    private val loginService: TelegramLoginService,
+) : ExternalIdentityVerifier {
+
+    override val provider = ExternalProvider.TELEGRAM
+
+    override fun verify(token: String): VerifiedIdentity = loginService.consumeConfirmed(token)
 }

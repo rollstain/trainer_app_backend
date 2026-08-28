@@ -17,6 +17,19 @@ data class LinkIdentityRequest(
     val token: String,
 )
 
+data class TelegramConfirmRequest(
+    @field:NotBlank
+    val startCode: String,
+    @field:NotBlank
+    val telegramUserId: String,
+    val telegramDisplayName: String?,
+)
+
+data class TelegramStartResponse(
+    val claimToken: String,
+    val deepLink: String,
+)
+
 data class LinkedIdentityResponse(
     val provider: ExternalProvider,
     val linkedAt: Instant,
