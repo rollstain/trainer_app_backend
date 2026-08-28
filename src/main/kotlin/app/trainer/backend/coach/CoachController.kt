@@ -23,9 +23,15 @@ class CoachController(private val coachService: CoachService) {
         @CurrentUserId coachUserId: UUID,
         @RequestParam(required = false) limit: Int?,
         @RequestParam(required = false) after: String?,
+        @RequestParam(required = false) ids: List<UUID>?,
     ): ResponseEntity<List<CoachClientResponse>> {
         return pageResponse(
-            coachService.clientsOfCoach(coachUserId = coachUserId, limit = limit, after = after)
+            coachService.clientsOfCoach(
+                coachUserId = coachUserId,
+                limit = limit,
+                after = after,
+                userIds = ids?.takeIf { it.isNotEmpty() },
+            )
         )
     }
 

@@ -27,10 +27,17 @@ class CoachService(
 ) {
 
     @Transactional(readOnly = true)
-    fun clientsOfCoach(coachUserId: UUID, limit: Int?, after: String?): Page<CoachClientResponse> {
+    fun clientsOfCoach(
+        coachUserId: UUID,
+        limit: Int?,
+        after: String?,
+        userIds: List<UUID>?,
+    ): Page<CoachClientResponse> {
         val coach = requireCoach(coachUserId)
-        val pageSize = pageSizeOf(limit)
-        val fetched = if (pageSize == null) {
+        val pageSize = if (userIds == null) pageSizeOf(limit) else null
+        val fetched = if (userIds != null) {
+            coachClientRepository.findActiveByUserIds(coachId = coach.id, userIds = userIds.toTypedArray())
+        } else if (pageSize == null) {
             coachClientRepository.findActiveOrdered(coachId = coach.id)
         } else {
             val cursor = decodeCursor(after)

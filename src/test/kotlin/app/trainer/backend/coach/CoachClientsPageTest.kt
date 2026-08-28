@@ -48,7 +48,12 @@ class CoachClientsPageTest {
         givenCoach()
         givenRoster(ordered = listOf(client("Анна"), client("Борис"), client("Вера")))
 
-        val page = service.clientsOfCoach(coachUserId = PAGE_COACH_USER_ID, limit = null, after = null)
+        val page = service.clientsOfCoach(
+            coachUserId = PAGE_COACH_USER_ID,
+            limit = null,
+            after = null,
+            userIds = null,
+        )
 
         assertEquals(listOf("Анна", "Борис", "Вера"), page.items.map { it.displayName })
         assertNull(page.nextCursor, "без limit подкачивать нечего")
@@ -64,7 +69,12 @@ class CoachClientsPageTest {
         val beyondThePage = client("Вера")
         givenPage(page = listOf(first, second, beyondThePage))
 
-        val page = service.clientsOfCoach(coachUserId = PAGE_COACH_USER_ID, limit = PAGE_SIZE, after = null)
+        val page = service.clientsOfCoach(
+            coachUserId = PAGE_COACH_USER_ID,
+            limit = PAGE_SIZE,
+            after = null,
+            userIds = null,
+        )
 
         assertEquals(listOf("Анна", "Борис"), page.items.map { it.displayName }, "лишняя строка наружу не уходит")
         val cursor = assertNotNull(decodeCursor(page.nextCursor))
@@ -77,10 +87,37 @@ class CoachClientsPageTest {
         givenCoach()
         givenPage(page = listOf(client("Анна")))
 
-        val page = service.clientsOfCoach(coachUserId = PAGE_COACH_USER_ID, limit = PAGE_SIZE, after = null)
+        val page = service.clientsOfCoach(
+            coachUserId = PAGE_COACH_USER_ID,
+            limit = PAGE_SIZE,
+            after = null,
+            userIds = null,
+        )
 
         assertEquals(1, page.items.size)
         assertNull(page.nextCursor, "страница неполная — дальше ничего нет")
+    }
+
+    @Test
+    fun `a picked handful of clients comes back whole, without paging`() {
+        givenCoach()
+        val anna = client("Анна")
+        val vera = client("Вера")
+        `when`(coachClientRepository.findActiveByUserIds(anyNonNull(), anyNonNull()))
+            .thenReturn(listOf(anna, vera))
+        givenUsersFor(listOf(anna, vera))
+
+        val page = service.clientsOfCoach(
+            coachUserId = PAGE_COACH_USER_ID,
+            limit = PAGE_SIZE,
+            after = null,
+            userIds = listOf(anna.userId, vera.userId),
+        )
+
+        assertEquals(listOf("Анна", "Вера"), page.items.map { it.displayName })
+        assertNull(page.nextCursor, "выборка по id не листается")
+        verify(coachClientRepository, never())
+            .findActivePage(anyNonNull(), anyNonNull(), anyNonNull(), ArgumentMatchers.anyInt())
     }
 
     private fun givenCoach() {
