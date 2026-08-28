@@ -35,6 +35,11 @@ class CoachController(private val coachService: CoachService) {
         )
     }
 
+    @GetMapping("/coach/clients/missed-sessions")
+    fun missedSessions(@CurrentUserId coachUserId: UUID): List<MissedSessionsResponse> {
+        return coachService.missedSessions(coachUserId)
+    }
+
     @DeleteMapping("/coach/clients/{clientUserId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     fun archiveClient(@CurrentUserId coachUserId: UUID, @PathVariable clientUserId: UUID) {

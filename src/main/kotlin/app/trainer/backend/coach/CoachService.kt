@@ -27,6 +27,13 @@ class CoachService(
 ) {
 
     @Transactional(readOnly = true)
+    fun missedSessions(coachUserId: UUID): List<MissedSessionsResponse> = scheduleService
+        .missedSessionsByClient(coachUserId)
+        .map { (clientUserId, missed) ->
+            MissedSessionsResponse(clientUserId = clientUserId, missedInARow = missed)
+        }
+
+    @Transactional(readOnly = true)
     fun clientsOfCoach(
         coachUserId: UUID,
         limit: Int?,

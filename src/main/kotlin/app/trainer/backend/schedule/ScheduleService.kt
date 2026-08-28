@@ -23,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val PUSH_SLOT_ID_KEY = "slotId"
 private const val PERSONAL_SLOT_CAPACITY = 1
+private const val MISSED_SESSIONS_WINDOW_DAYS = 30L
 
 @Service
 class ScheduleService(
@@ -81,6 +82,27 @@ class ScheduleService(
         }
         return CreateSlotSeriesResponse(created = created, skipped = skipped)
     }
+
+    @Transactional(readOnly = true)
+    fun missedSessionsByClient(coachUserId: UUID): Map<UUID, Int> {
+        val coach = requireCoach(coachUserId)
+        val now = Instant.now(clock)
+        return participantRepository
+            .findPastParticipation(
+                coachId = coach.id,
+                from = now.minus(MISSED_SESSIONS_WINDOW_DAYS, ChronoUnit.DAYS),
+                to = now,
+            )
+            .groupBy { it.getClientUserId() }
+            .mapValues { (_, participation) -> countMissedInARow(participation) }
+            .filterValues { it > 0 }
+    }
+
+    private fun countMissedInARow(participation: List<PastParticipation>): Int =
+        participation
+            .filter { it.getStatus() != SlotLifecycle.CANCELLED.name }
+            .takeWhile { it.getStatus() != SlotLifecycle.COMPLETED.name }
+            .size
 
     @Transactional(readOnly = true)
     fun coachSchedule(coachUserId: UUID, from: Instant, to: Instant): CoachScheduleResponse {

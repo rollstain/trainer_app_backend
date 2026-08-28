@@ -94,6 +94,23 @@ interface SlotChangeRequestRepository : JpaRepository<SlotChangeRequestEntity, U
 
 interface SlotParticipantRepository : JpaRepository<SlotParticipantEntity, UUID> {
 
+    @Query(
+        value = """
+            select p.user_id as clientUserId, s.starts_at as startsAt, s.status as status
+            from slot_participants p
+            join training_slots s on s.id = p.slot_id
+            where s.coach_id = :coachId
+              and s.starts_at between :from and :to
+            order by p.user_id, s.starts_at desc
+        """,
+        nativeQuery = true,
+    )
+    fun findPastParticipation(
+        @Param("coachId") coachId: UUID,
+        @Param("from") from: Instant,
+        @Param("to") to: Instant,
+    ): List<PastParticipation>
+
     fun findBySlotId(slotId: UUID): List<SlotParticipantEntity>
 
     fun findBySlotIdIn(slotIds: Collection<UUID>): List<SlotParticipantEntity>
@@ -103,4 +120,13 @@ interface SlotParticipantRepository : JpaRepository<SlotParticipantEntity, UUID>
     fun countBySlotId(slotId: UUID): Int
 
     fun deleteBySlotIdAndUserId(slotId: UUID, userId: UUID)
+}
+
+interface PastParticipation {
+
+    fun getClientUserId(): UUID
+
+    fun getStartsAt(): Instant
+
+    fun getStatus(): String
 }

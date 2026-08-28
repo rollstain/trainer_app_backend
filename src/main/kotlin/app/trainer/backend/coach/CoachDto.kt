@@ -45,3 +45,8 @@ data class CoachPolicyResponse(
     val diaryRemindersEnabled: Boolean,
     val checkInRemindersEnabled: Boolean,
 )
+
+data class MissedSessionsResponse(
+    val clientUserId: UUID,
+    val missedInARow: Int,
+)
