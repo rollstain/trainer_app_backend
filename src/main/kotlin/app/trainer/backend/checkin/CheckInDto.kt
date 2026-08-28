@@ -3,24 +3,31 @@ package app.trainer.backend.checkin
 import app.trainer.backend.media.MediaFileResponse
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
-import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import java.time.LocalDate
 import java.util.UUID
 
+private const val MIN_HUMAN_WEIGHT_GRAMS = 20_000L
+private const val MAX_HUMAN_WEIGHT_GRAMS = 400_000L
+private const val MIN_HUMAN_GIRTH_MILLIMETERS = 200L
+private const val MAX_HUMAN_GIRTH_MILLIMETERS = 3_000L
 private const val MIN_RATING = 1L
 private const val MAX_RATING = 5L
 private const val NOTES_MAX_LENGTH = 2000
 private const val PHOTOS_MAX_COUNT = 6
 
 data class SaveCheckInRequest(
-    @field:Positive
+    @field:Min(MIN_HUMAN_WEIGHT_GRAMS)
+    @field:Max(MAX_HUMAN_WEIGHT_GRAMS)
     val weightGrams: Int?,
-    @field:Positive
+    @field:Min(MIN_HUMAN_GIRTH_MILLIMETERS)
+    @field:Max(MAX_HUMAN_GIRTH_MILLIMETERS)
     val waistMillimeters: Int?,
-    @field:Positive
+    @field:Min(MIN_HUMAN_GIRTH_MILLIMETERS)
+    @field:Max(MAX_HUMAN_GIRTH_MILLIMETERS)
     val chestMillimeters: Int?,
-    @field:Positive
+    @field:Min(MIN_HUMAN_GIRTH_MILLIMETERS)
+    @field:Max(MAX_HUMAN_GIRTH_MILLIMETERS)
     val hipsMillimeters: Int?,
     @field:Min(MIN_RATING)
     @field:Max(MAX_RATING)
