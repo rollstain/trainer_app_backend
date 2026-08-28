@@ -5,6 +5,7 @@ import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.traininglog.ExerciseEntity
+import app.trainer.backend.traininglog.ExerciseOwnerKind
 import app.trainer.backend.traininglog.ExerciseRepository
 import java.time.Clock
 import java.time.Instant
@@ -329,7 +330,7 @@ class ProgramService(
         val available = exerciseRepository
             .findAllById(exerciseIds.distinct())
             .filter(::isUsable)
-            .filter { it.coachId == null || it.coachId == coach.id }
+            .filter { it.ownerKind == ExerciseOwnerKind.SHARED || it.ownerId == coach.id }
             .map { it.id }
             .toSet()
         if (!available.containsAll(exerciseIds.toSet())) {

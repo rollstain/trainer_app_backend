@@ -43,12 +43,20 @@ class TrainingLogController(private val trainingLogService: TrainingLogService) 
         return trainingLogService.diarySummary(coachUserId = coachUserId, from = from, to = to)
     }
 
-    @PostMapping("/coach/exercises")
+    @PostMapping("/exercises")
     fun createExercise(
-        @CurrentUserId coachUserId: UUID,
+        @CurrentUserId userId: UUID,
         @Valid @RequestBody request: CreateExerciseRequest,
     ): ExerciseResponse {
-        return trainingLogService.createExercise(coachUserId = coachUserId, request = request)
+        return trainingLogService.createExercise(userId = userId, request = request)
+    }
+
+    @PostMapping("/coach/exercises")
+    fun createCoachExercise(
+        @CurrentUserId userId: UUID,
+        @Valid @RequestBody request: CreateExerciseRequest,
+    ): ExerciseResponse {
+        return trainingLogService.createExercise(userId = userId, request = request)
     }
 
     @PostMapping("/coach/exercises/video-uploads")

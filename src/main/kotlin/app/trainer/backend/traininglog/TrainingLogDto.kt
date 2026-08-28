@@ -18,9 +18,11 @@ private const val EXERCISE_VIDEO_URL_MAX_LENGTH = 500
 data class ExerciseResponse(
     val id: UUID,
     val name: String,
-    val muscleGroup: String?,
+    val primaryMuscle: MuscleGroup?,
+    val equipment: Equipment?,
     val kind: ExerciseKind,
-    val isOwnedByCoach: Boolean,
+    val ownerKind: ExerciseOwnerKind,
+    val ownerDisplayName: String?,
     val description: String?,
     val videoUrl: String?,
     val video: MediaFileResponse?,
@@ -34,8 +36,8 @@ data class CreateExerciseRequest(
     @field:NotBlank
     @field:Size(max = EXERCISE_NAME_MAX_LENGTH)
     val name: String,
-    @field:Size(max = EXERCISE_NAME_MAX_LENGTH)
-    val muscleGroup: String?,
+    val primaryMuscle: MuscleGroup,
+    val equipment: Equipment,
     val kind: ExerciseKind,
     @field:Size(max = EXERCISE_DESCRIPTION_MAX_LENGTH)
     val description: String?,

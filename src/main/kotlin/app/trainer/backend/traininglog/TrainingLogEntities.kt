@@ -20,14 +20,23 @@ class ExerciseEntity(
     @Column(name = "id")
     val id: UUID,
 
-    @Column(name = "coach_id")
-    val coachId: UUID?,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "owner_kind")
+    val ownerKind: ExerciseOwnerKind,
+
+    @Column(name = "owner_id")
+    val ownerId: UUID?,
 
     @Column(name = "name")
     var name: String,
 
-    @Column(name = "muscle_group")
-    var muscleGroup: String?,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "primary_muscle")
+    var primaryMuscle: MuscleGroup?,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "equipment")
+    var equipment: Equipment?,
 
     @Enumerated(EnumType.STRING)
     @Column(name = "kind")

@@ -5,9 +5,12 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.traininglog.Equipment
 import app.trainer.backend.traininglog.ExerciseEntity
 import app.trainer.backend.traininglog.ExerciseKind
+import app.trainer.backend.traininglog.ExerciseOwnerKind
 import app.trainer.backend.traininglog.ExerciseRepository
+import app.trainer.backend.traininglog.MuscleGroup
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -371,9 +374,11 @@ class ProgramServiceTest {
 
     private fun squat(): ExerciseEntity = ExerciseEntity(
         id = SQUAT_ID,
-        coachId = COACH_ID,
+        ownerKind = ExerciseOwnerKind.COACH,
+        ownerId = COACH_ID,
         name = "Приседания",
-        muscleGroup = "Ноги",
+        primaryMuscle = MuscleGroup.CHEST,
+        equipment = Equipment.BARBELL,
         kind = ExerciseKind.STRENGTH,
         description = null,
         videoUrl = null,

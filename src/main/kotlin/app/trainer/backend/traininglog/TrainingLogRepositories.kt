@@ -12,18 +12,18 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
         value = """
             select e.* from exercises e
             where e.archived_at is null
-              and (e.coach_id is null or e.coach_id = any (cast(:coachIds as uuid[])))
+              and (e.owner_kind = 'SHARED' or e.owner_id = any (cast(:ownerIds as uuid[])))
             order by e.name
         """,
         nativeQuery = true,
     )
-    fun findAvailable(@Param("coachIds") coachIds: Array<UUID>): List<ExerciseEntity>
+    fun findAvailable(@Param("ownerIds") ownerIds: Array<UUID>): List<ExerciseEntity>
 
     @Query(
         value = """
             select e.* from exercises e
             where e.archived_at is null
-              and (e.coach_id is null or e.coach_id = any (cast(:coachIds as uuid[])))
+              and (e.owner_kind = 'SHARED' or e.owner_id = any (cast(:ownerIds as uuid[])))
               and (
                 cast(:afterName as text) is null
                 or (e.name, e.id) > (cast(:afterName as text), cast(:afterId as uuid))
@@ -34,13 +34,13 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
         nativeQuery = true,
     )
     fun findAvailablePage(
-        @Param("coachIds") coachIds: Array<UUID>,
+        @Param("ownerIds") ownerIds: Array<UUID>,
         @Param("afterName") afterName: String?,
         @Param("afterId") afterId: UUID?,
         @Param("pageSize") pageSize: Int,
     ): List<ExerciseEntity>
 
-    fun findByCoachIdAndArchivedAtIsNull(coachId: UUID): List<ExerciseEntity>
+    fun findByOwnerIdAndArchivedAtIsNull(ownerId: UUID): List<ExerciseEntity>
 }
 
 interface ClientDiaryDay {

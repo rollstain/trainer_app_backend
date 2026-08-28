@@ -152,9 +152,11 @@ class ExerciseVideoTest {
 
     private fun exercise(coachId: UUID?): ExerciseEntity = ExerciseEntity(
         id = EXERCISE_ID,
-        coachId = coachId,
+        ownerKind = ExerciseOwnerKind.COACH,
+        ownerId = coachId,
         name = "Приседания",
-        muscleGroup = "Ноги",
+        primaryMuscle = MuscleGroup.CHEST,
+        equipment = Equipment.BARBELL,
         kind = ExerciseKind.STRENGTH,
         description = null,
         videoUrl = null,

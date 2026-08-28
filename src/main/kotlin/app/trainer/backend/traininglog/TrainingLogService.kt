@@ -40,14 +40,14 @@ class TrainingLogService(
 
     @Transactional(readOnly = true)
     fun availableExercises(userId: UUID, limit: Int?, after: String?): Page<ExerciseResponse> {
-        val coachIds = coachIdsVisibleTo(userId).toTypedArray()
+        val ownerIds = ownerIdsVisibleTo(userId).toTypedArray()
         val pageSize = pageSizeOf(limit)
         val fetched = if (pageSize == null) {
-            exerciseRepository.findAvailable(coachIds)
+            exerciseRepository.findAvailable(ownerIds)
         } else {
             val cursor = decodeCursor(after)
             exerciseRepository.findAvailablePage(
-                coachIds = coachIds,
+                ownerIds = ownerIds,
                 afterName = cursor?.sortKey,
                 afterId = cursor?.id,
                 pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
@@ -105,7 +105,7 @@ class TrainingLogService(
     private fun requireOwnExercise(coachId: UUID, exerciseId: UUID): ExerciseEntity {
         val exercise = exerciseRepository.findByIdOrNull(exerciseId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Упражнение не найдено")
-        if (exercise.coachId != coachId) {
+        if (exercise.ownerId != coachId || exercise.ownerKind != ExerciseOwnerKind.COACH) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Упражнение не найдено")
         }
         return exercise
@@ -147,15 +147,16 @@ class TrainingLogService(
     }
 
     @Transactional
-    fun createExercise(coachUserId: UUID, request: CreateExerciseRequest): ExerciseResponse {
-        val coach = coachRepository.findByUserId(coachUserId)
-            ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не тренер")
+    fun createExercise(userId: UUID, request: CreateExerciseRequest): ExerciseResponse {
+        val coach = coachRepository.findByUserId(userId)
         val exercise = exerciseRepository.save(
             ExerciseEntity(
                 id = UUID.randomUUID(),
-                coachId = coach.id,
+                ownerKind = if (coach == null) ExerciseOwnerKind.CLIENT else ExerciseOwnerKind.COACH,
+                ownerId = coach?.id ?: userId,
                 name = request.name.trim(),
-                muscleGroup = request.muscleGroup?.trim()?.ifEmpty { null },
+                primaryMuscle = request.primaryMuscle,
+                equipment = request.equipment,
                 kind = request.kind,
                 description = request.description?.trim()?.ifEmpty { null },
                 videoUrl = request.videoUrl?.trim()?.ifEmpty { null },
@@ -301,12 +302,23 @@ class TrainingLogService(
         return if (volume == 0L) null else volume
     }
 
-    private fun coachIdsVisibleTo(userId: UUID): List<UUID> {
+    private fun ownerNameOf(exercise: ExerciseEntity): String? = when (exercise.ownerKind) {
+        ExerciseOwnerKind.SHARED, ExerciseOwnerKind.COACH -> null
+        ExerciseOwnerKind.CLIENT -> exercise.ownerId?.let { userRepository.findByIdOrNull(it)?.displayName }
+    }
+
+    private fun ownerIdsVisibleTo(userId: UUID): List<UUID> {
         val ownCoach = coachRepository.findByUserId(userId)
-        if (ownCoach != null) return listOf(ownCoach.id)
-        return coachClientRepository.findByUserId(userId)
+        if (ownCoach != null) {
+            val clientIds = coachClientRepository
+                .findByCoachIdAndStatus(coachId = ownCoach.id, status = CoachClientStatus.ACTIVE)
+                .map { it.userId }
+            return listOf(ownCoach.id) + clientIds
+        }
+        val coachIds = coachClientRepository.findByUserId(userId)
             .filter { it.status == CoachClientStatus.ACTIVE }
             .map { it.coachId }
+        return listOf(userId) + coachIds
     }
 
     private fun requireKnownExercises(
@@ -316,7 +328,7 @@ class TrainingLogService(
         val requestedIds = request.sets.map { it.exerciseId }.distinct()
         if (requestedIds.isEmpty()) return emptyMap()
         val available = exerciseRepository
-            .findAvailable(coachIdsVisibleTo(userId).toTypedArray())
+            .findAvailable(ownerIdsVisibleTo(userId).toTypedArray())
             .associateBy { it.id }
         val unknown = requestedIds.filterNot(available::containsKey)
         if (unknown.isNotEmpty()) {
@@ -346,9 +358,11 @@ class TrainingLogService(
     ): ExerciseResponse = ExerciseResponse(
         id = exercise.id,
         name = exercise.name,
-        muscleGroup = exercise.muscleGroup,
+        primaryMuscle = exercise.primaryMuscle,
+        equipment = exercise.equipment,
         kind = exercise.kind,
-        isOwnedByCoach = exercise.coachId != null,
+        ownerKind = exercise.ownerKind,
+        ownerDisplayName = ownerNameOf(exercise),
         description = exercise.description,
         videoUrl = exercise.videoUrl,
         video = video,
