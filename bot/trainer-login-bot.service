@@ -1,0 +1,19 @@
+[Unit]
+Description=Telegram login bot for trainer app
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=trainerbot
+EnvironmentFile=/etc/trainer-bot/bot.env
+ExecStart=/usr/bin/python3 /opt/trainer-bot/telegram_login_bot.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
