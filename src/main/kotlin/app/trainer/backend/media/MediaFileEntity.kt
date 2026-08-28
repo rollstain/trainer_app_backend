@@ -10,7 +10,7 @@ import java.time.Instant
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
 
-enum class MediaOwnerKind { DIALOG_MESSAGE, CHECK_IN, EXERCISE }
+enum class MediaOwnerKind { DIALOG_MESSAGE, CHECK_IN, EXERCISE, FORM_CHECK }
 
 @Entity
 @Table(name = "media_files")

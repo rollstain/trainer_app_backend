@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException
 private const val DIALOG_STORAGE_PREFIX = "dialogs"
 private const val CHECK_IN_STORAGE_PREFIX = "check-ins"
 private const val EXERCISE_STORAGE_PREFIX = "exercises"
+private const val FORM_CHECK_STORAGE_PREFIX = "form-checks"
 
 @Service
 class MediaFileService(
@@ -232,6 +233,7 @@ class MediaFileService(
             MediaOwnerKind.DIALOG_MESSAGE -> DIALOG_STORAGE_PREFIX
             MediaOwnerKind.CHECK_IN -> CHECK_IN_STORAGE_PREFIX
             MediaOwnerKind.EXERCISE -> EXERCISE_STORAGE_PREFIX
+            MediaOwnerKind.FORM_CHECK -> FORM_CHECK_STORAGE_PREFIX
         }
         return "$prefix/$scopeId/$mediaFileId"
     }
