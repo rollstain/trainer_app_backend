@@ -9,7 +9,8 @@ import app.trainer.backend.push.PushChannel
 import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
 import app.trainer.backend.push.PushText
-import app.trainer.backend.schedule.SlotStatus
+import app.trainer.backend.schedule.SlotLifecycle
+import app.trainer.backend.schedule.SlotParticipantRepository
 import app.trainer.backend.schedule.TrainingSlotRepository
 import app.trainer.backend.traininglog.TrainingLogEntryRepository
 import java.time.Clock
@@ -37,6 +38,7 @@ class ReminderService(
     private val checkInRepository: CheckInRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
+    private val participantRepository: SlotParticipantRepository,
     private val reminderLogRepository: ReminderLogRepository,
     private val pushSender: PushSender,
     private val clock: Clock,
@@ -47,28 +49,29 @@ class ReminderService(
         val now = Instant.now(clock)
         val from = now.plus(SESSION_REMINDER_LEAD_MINUTES - SESSION_REMINDER_WINDOW_MINUTES, ChronoUnit.MINUTES)
         val to = now.plus(SESSION_REMINDER_LEAD_MINUTES, ChronoUnit.MINUTES)
-        val booked = slotRepository
+        val upcoming = slotRepository
             .findByStartsAtBetweenOrderByStartsAtAsc(from, to)
-            .filter { it.status == SlotStatus.BOOKED }
-        if (booked.isEmpty()) return 0
+            .filter { it.lifecycle == SlotLifecycle.SCHEDULED }
+        if (upcoming.isEmpty()) return 0
 
         val remindingCoachIds = coachRepository
-            .findAllById(booked.map { it.coachId }.distinct())
+            .findAllById(upcoming.map { it.coachId }.distinct())
             .filter { it.sessionRemindersEnabled }
             .map { it.id }
             .toSet()
-        return booked
-            .filter { remindingCoachIds.contains(it.coachId) }
-            .mapNotNull { slot -> slot.clientUserId?.let { client -> slot.id to client } }
-            .count { (slotId, clientUserId) ->
+        val remindedSlotIds = upcoming.filter { remindingCoachIds.contains(it.coachId) }.map { it.id }
+        if (remindedSlotIds.isEmpty()) return 0
+        return participantRepository
+            .findBySlotIdIn(remindedSlotIds)
+            .count { participation ->
                 send(
-                    userId = clientUserId,
+                    userId = participation.userId,
                     kind = ReminderKind.SESSION,
-                    subject = slotId.toString(),
+                    subject = participation.slotId.toString(),
                     message = PushMessage(
                         channel = PushChannel.SCHEDULE,
                         text = PushText.SESSION_SOON,
-                        data = mapOf(PUSH_SLOT_ID_KEY to slotId.toString()),
+                        data = mapOf(PUSH_SLOT_ID_KEY to participation.slotId.toString()),
                     ),
                 )
             }

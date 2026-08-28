@@ -1,6 +1,7 @@
 package app.trainer.backend.schedule
 
 import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import java.time.DayOfWeek
@@ -11,12 +12,17 @@ import java.util.UUID
 
 private const val MAX_SERIES_WEEKS = 52L
 private const val MAX_SLOT_DURATION_MINUTES = 600L
+private const val MIN_SLOT_CAPACITY = 1L
+private const val MAX_SLOT_CAPACITY = 30L
 
 data class CreateSlotRequest(
     val startsAt: Instant,
     @field:Positive
     @field:Max(MAX_SLOT_DURATION_MINUTES)
     val durationMinutes: Int,
+    @field:Min(MIN_SLOT_CAPACITY)
+    @field:Max(MAX_SLOT_CAPACITY)
+    val capacity: Int?,
 )
 
 data class CreateSlotSeriesRequest(
@@ -30,6 +36,9 @@ data class CreateSlotSeriesRequest(
     @field:Positive
     @field:Max(MAX_SLOT_DURATION_MINUTES)
     val durationMinutes: Int,
+    @field:Min(MIN_SLOT_CAPACITY)
+    @field:Max(MAX_SLOT_CAPACITY)
+    val capacity: Int?,
 )
 
 data class SkippedSlotResponse(
@@ -46,6 +55,11 @@ data class CreateSlotSeriesResponse(
 
 data class AssignSlotRequest(val clientUserId: UUID)
 
+data class SlotParticipantResponse(
+    val userId: UUID,
+    val displayName: String?,
+)
+
 data class CoachSlotResponse(
     val id: UUID,
     val startsAt: Instant,
@@ -54,6 +68,9 @@ data class CoachSlotResponse(
     val clientUserId: UUID?,
     val clientDisplayName: String?,
     val pendingChangeRequestId: UUID?,
+    val capacity: Int,
+    val takenSeats: Int,
+    val participants: List<SlotParticipantResponse>,
 )
 
 data class ClientSlotResponse(
@@ -65,6 +82,8 @@ data class ClientSlotResponse(
     val pendingChangeRequestId: UUID?,
     val canRequestChange: Boolean,
     val isOnWaitlist: Boolean,
+    val capacity: Int,
+    val takenSeats: Int,
 )
 
 data class CoachScheduleResponse(

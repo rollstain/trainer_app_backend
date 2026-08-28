@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val PUSH_SLOT_ID_KEY = "slotId"
+private const val PERSONAL_SLOT_CAPACITY = 1
 
 @Service
 class ScheduleService(
@@ -31,6 +32,7 @@ class ScheduleService(
     private val coachClientRepository: CoachClientRepository,
     private val userRepository: UserRepository,
     private val waitlistRepository: SlotWaitlistRepository,
+    private val participantRepository: SlotParticipantRepository,
     private val pushSender: PushSender,
     private val clock: Clock,
 ) {
@@ -45,6 +47,7 @@ class ScheduleService(
             coachId = coach.id,
             startsAt = request.startsAt,
             durationMinutes = request.durationMinutes,
+            capacity = request.capacity ?: PERSONAL_SLOT_CAPACITY,
         )
         return toCoachResponse(slot = slot, pendingRequestId = null)
     }
@@ -71,6 +74,7 @@ class ScheduleService(
                     coachId = coach.id,
                     startsAt = startsAt,
                     durationMinutes = request.durationMinutes,
+                    capacity = request.capacity ?: PERSONAL_SLOT_CAPACITY,
                 )
                 created.add(toCoachResponse(slot = slot, pendingRequestId = null))
             }
@@ -87,10 +91,17 @@ class ScheduleService(
             to = to,
         )
         val pendingBySlot = pendingRequestIdsFor(slots)
+        val participantsBySlot = participantsOf(slots)
         return CoachScheduleResponse(
             coachId = coach.id,
             zoneId = coach.zoneId,
-            slots = slots.map { slot -> toCoachResponse(slot = slot, pendingRequestId = pendingBySlot[slot.id]) },
+            slots = slots.map { slot ->
+                toCoachResponse(
+                    slot = slot,
+                    pendingRequestId = pendingBySlot[slot.id],
+                    participants = participantsBySlot[slot.id].orEmpty(),
+                )
+            },
         )
     }
 
@@ -105,6 +116,12 @@ class ScheduleService(
             to = to,
         )
         val pendingBySlot = pendingRequestIdsFor(slots)
+        val seatsBySlot = seatsTakenIn(slots)
+        val mySlotIds = participantRepository
+            .findBySlotIdIn(slots.map { it.id })
+            .filter { it.userId == userId }
+            .map { it.slotId }
+            .toSet()
         val waitlistedSlotIds = waitlistRepository
             .findBySlotIdInAndUserId(slotIds = slots.map { it.id }, userId = userId)
             .map { it.slotId }
@@ -114,11 +131,12 @@ class ScheduleService(
             zoneId = coach.zoneId,
             cancellationWindowHours = coach.cancellationWindowHours,
             slots = slots
-                .filter { it.status != SlotStatus.CANCELLED }
+                .filter { it.lifecycle != SlotLifecycle.CANCELLED }
                 .map { slot ->
                     toClientResponse(
                         slot = slot,
-                        userId = userId,
+                        isMine = mySlotIds.contains(slot.id),
+                        takenSeats = seatsBySlot[slot.id] ?: 0,
                         pendingBySlot = pendingBySlot,
                         cancellationWindowHours = coach.cancellationWindowHours,
                         isOnWaitlist = waitlistedSlotIds.contains(slot.id),
@@ -133,11 +151,10 @@ class ScheduleService(
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
         requireActiveCoachClient(coachId = coach.id, userId = clientUserId)
-        if (slot.status == SlotStatus.COMPLETED) {
+        if (slot.lifecycle == SlotLifecycle.COMPLETED) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Тренировка уже проведена")
         }
-        slot.status = SlotStatus.BOOKED
-        slot.clientUserId = clientUserId
+        takeSeat(slot = slot, userId = clientUserId)
         return toCoachResponse(slot = slot, pendingRequestId = null)
     }
 
@@ -146,7 +163,7 @@ class ScheduleService(
         val coach = requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
-        slot.status = SlotStatus.CANCELLED
+        slot.lifecycle = SlotLifecycle.CANCELLED
         rejectPendingRequest(slotId = slot.id)
         return toCoachResponse(slot = slot, pendingRequestId = null)
     }
@@ -154,17 +171,15 @@ class ScheduleService(
     @Transactional
     fun releaseBookingsOf(coachId: UUID, clientUserId: UUID) {
         slotRepository
-            .findByCoachIdAndClientUserIdAndStartsAtAfter(
+            .findParticipatedAfter(
                 coachId = coachId,
-                clientUserId = clientUserId,
+                userId = clientUserId,
                 startsAt = Instant.now(clock),
             )
-            .filter { it.status == SlotStatus.BOOKED }
+            .filter { it.lifecycle == SlotLifecycle.SCHEDULED }
             .forEach { slot ->
-                slot.status = SlotStatus.FREE
-                slot.clientUserId = null
                 rejectPendingRequest(slotId = slot.id)
-                notifyWaitlist(slot)
+                freeSeat(slot = slot, userId = clientUserId)
             }
     }
 
@@ -173,10 +188,10 @@ class ScheduleService(
         val coach = requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
-        if (slot.clientUserId == null) {
+        if (seatsTakenIn(slot.id) == 0) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "На слот никто не записан")
         }
-        slot.status = SlotStatus.COMPLETED
+        slot.lifecycle = SlotLifecycle.COMPLETED
         rejectPendingRequest(slotId = slot.id)
         return toCoachResponse(slot = slot, pendingRequestId = null)
     }
@@ -185,12 +200,9 @@ class ScheduleService(
     fun book(userId: UUID, slotId: UUID): ClientSlotResponse {
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireActiveCoachClient(coachId = slot.coachId, userId = userId)
-        if (slot.status != SlotStatus.FREE) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Слот уже занят")
-        }
-        slot.status = SlotStatus.BOOKED
-        slot.clientUserId = userId
-        waitlistRepository.deleteBySlotId(slot.id)
+        takeSeat(slot = slot, userId = userId)
+        val entry = waitlistRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId)
+        if (entry != null) waitlistRepository.delete(entry)
         return clientResponseOf(slot = slot, userId = userId)
     }
 
@@ -198,11 +210,11 @@ class ScheduleService(
     fun joinWaitlist(userId: UUID, slotId: UUID): ClientSlotResponse {
         val slot = slotRepository.findByIdOrNull(slotId) ?: slotNotFound()
         requireActiveCoachClient(coachId = slot.coachId, userId = userId)
-        if (slot.status == SlotStatus.FREE) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Слот свободен, его можно занять сразу")
+        if (statusOf(slot = slot, takenSeats = seatsTakenIn(slot.id)) == SlotStatus.FREE) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Свободные места есть, можно записаться сразу")
         }
-        if (slot.clientUserId == userId) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Слот уже ваш")
+        if (participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId) != null) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Вы уже записаны на это занятие")
         }
         if (waitlistRepository.findBySlotIdAndUserId(slotId = slotId, userId = userId) == null) {
             waitlistRepository.save(
@@ -235,7 +247,8 @@ class ScheduleService(
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
         return toClientResponse(
             slot = slot,
-            userId = userId,
+            isMine = participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId) != null,
+            takenSeats = seatsTakenIn(slot.id),
             pendingBySlot = emptyMap(),
             cancellationWindowHours = coach.cancellationWindowHours,
             isOnWaitlist = isOnWaitlist,
@@ -260,11 +273,17 @@ class ScheduleService(
     @Transactional
     fun requestChange(userId: UUID, slotId: UUID, body: SlotChangeRequestBody): SlotChangeRequestResponse {
         val slot = slotRepository.findByIdOrNull(slotId) ?: slotNotFound()
-        if (slot.clientUserId != userId) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Слот забронирован не вами")
+        if (participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId) == null) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Вы не записаны на это занятие")
         }
-        if (slot.status != SlotStatus.BOOKED) {
+        if (slot.lifecycle != SlotLifecycle.SCHEDULED) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "По этому слоту заявку подать нельзя")
+        }
+        if (body.kind == SlotChangeKind.RESCHEDULE && slot.capacity > PERSONAL_SLOT_CAPACITY) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Групповое занятие переносит тренер: вы можете только отменить своё участие",
+            )
         }
         if (body.kind == SlotChangeKind.RESCHEDULE && body.proposedStartsAt == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Для переноса нужно новое время")
@@ -329,11 +348,7 @@ class ScheduleService(
 
     private fun applyChange(slot: TrainingSlotEntity, request: SlotChangeRequestEntity) {
         when (request.kind) {
-            SlotChangeKind.CANCEL -> {
-                slot.status = SlotStatus.FREE
-                slot.clientUserId = null
-                notifyWaitlist(slot)
-            }
+            SlotChangeKind.CANCEL -> freeSeat(slot = slot, userId = request.requestedByUserId)
             SlotChangeKind.RESCHEDULE -> {
                 val proposed = request.proposedStartsAt
                     ?: throw ResponseStatusException(HttpStatus.CONFLICT, "В заявке нет нового времени")
@@ -373,18 +388,57 @@ class ScheduleService(
         return starts
     }
 
-    private fun saveFreeSlot(coachId: UUID, startsAt: Instant, durationMinutes: Int): TrainingSlotEntity {
+    private fun saveFreeSlot(
+        coachId: UUID,
+        startsAt: Instant,
+        durationMinutes: Int,
+        capacity: Int,
+    ): TrainingSlotEntity {
         return slotRepository.save(
             TrainingSlotEntity(
                 id = UUID.randomUUID(),
                 coachId = coachId,
                 startsAt = startsAt,
                 durationMinutes = durationMinutes,
-                status = SlotStatus.FREE,
-                clientUserId = null,
+                capacity = capacity,
+                lifecycle = SlotLifecycle.SCHEDULED,
                 createdAt = Instant.now(clock),
             )
         )
+    }
+
+    private fun seatsTakenIn(slotId: UUID): Int = participantRepository.countBySlotId(slotId)
+
+    private fun statusOf(slot: TrainingSlotEntity, takenSeats: Int): SlotStatus = when (slot.lifecycle) {
+        SlotLifecycle.CANCELLED -> SlotStatus.CANCELLED
+        SlotLifecycle.COMPLETED -> SlotStatus.COMPLETED
+        SlotLifecycle.SCHEDULED -> if (takenSeats < slot.capacity) SlotStatus.FREE else SlotStatus.BOOKED
+    }
+
+    private fun takeSeat(slot: TrainingSlotEntity, userId: UUID) {
+        if (slot.lifecycle != SlotLifecycle.SCHEDULED) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "На это занятие записаться нельзя")
+        }
+        if (participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId) != null) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Вы уже записаны на это занятие")
+        }
+        if (seatsTakenIn(slot.id) >= slot.capacity) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Свободных мест не осталось")
+        }
+        participantRepository.save(
+            SlotParticipantEntity(
+                id = UUID.randomUUID(),
+                slotId = slot.id,
+                userId = userId,
+                createdAt = Instant.now(clock),
+            )
+        )
+    }
+
+    private fun freeSeat(slot: TrainingSlotEntity, userId: UUID) {
+        val participation = participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId) ?: return
+        participantRepository.delete(participation)
+        notifyWaitlist(slot)
     }
 
     private fun hasOverlap(
@@ -436,38 +490,73 @@ class ScheduleService(
         return userId?.let { userRepository.findByIdOrNull(it)?.displayName }
     }
 
-    private fun toCoachResponse(slot: TrainingSlotEntity, pendingRequestId: UUID?): CoachSlotResponse {
+    private fun toCoachResponse(
+        slot: TrainingSlotEntity,
+        pendingRequestId: UUID?,
+        participants: List<SlotParticipantResponse> = participantsOf(slot.id),
+    ): CoachSlotResponse {
+        val soleParticipant = participants.singleOrNull()
         return CoachSlotResponse(
             id = slot.id,
             startsAt = slot.startsAt,
             durationMinutes = slot.durationMinutes,
-            status = slot.status,
-            clientUserId = slot.clientUserId,
-            clientDisplayName = displayNameOf(slot.clientUserId),
+            status = statusOf(slot = slot, takenSeats = participants.size),
+            clientUserId = soleParticipant?.userId,
+            clientDisplayName = soleParticipant?.displayName,
             pendingChangeRequestId = pendingRequestId,
+            capacity = slot.capacity,
+            takenSeats = participants.size,
+            participants = participants,
         )
     }
 
+    private fun participantsOf(slots: List<TrainingSlotEntity>): Map<UUID, List<SlotParticipantResponse>> {
+        val participants = participantRepository.findBySlotIdIn(slots.map { it.id })
+        val names = namesOf(participants.map { it.userId })
+        return participants
+            .groupBy { it.slotId }
+            .mapValues { (_, rows) ->
+                rows.map { SlotParticipantResponse(userId = it.userId, displayName = names[it.userId]) }
+            }
+    }
+
+    private fun seatsTakenIn(slots: List<TrainingSlotEntity>): Map<UUID, Int> = participantRepository
+        .findBySlotIdIn(slots.map { it.id })
+        .groupingBy { it.slotId }
+        .eachCount()
+
+    private fun participantsOf(slotId: UUID): List<SlotParticipantResponse> {
+        val participants = participantRepository.findBySlotId(slotId)
+        val names = namesOf(participants.map { it.userId })
+        return participants.map { SlotParticipantResponse(userId = it.userId, displayName = names[it.userId]) }
+    }
+
+    private fun namesOf(userIds: List<UUID>): Map<UUID, String> = userRepository
+        .findAllById(userIds.distinct())
+        .associate { it.id to it.displayName }
+
     private fun toClientResponse(
         slot: TrainingSlotEntity,
-        userId: UUID,
+        isMine: Boolean,
+        takenSeats: Int,
         pendingBySlot: Map<UUID, UUID>,
         cancellationWindowHours: Int,
         isOnWaitlist: Boolean,
     ): ClientSlotResponse {
-        val isMine = slot.clientUserId == userId
         return ClientSlotResponse(
             id = slot.id,
             startsAt = slot.startsAt,
             durationMinutes = slot.durationMinutes,
             isBookedByMe = isMine,
-            isAvailable = slot.status == SlotStatus.FREE,
+            isAvailable = statusOf(slot = slot, takenSeats = takenSeats) == SlotStatus.FREE,
             pendingChangeRequestId = if (isMine) pendingBySlot[slot.id] else null,
             canRequestChange = isMine && isWithinChangeWindow(
                 slot = slot,
                 cancellationWindowHours = cancellationWindowHours,
             ),
             isOnWaitlist = isOnWaitlist,
+            capacity = slot.capacity,
+            takenSeats = takenSeats,
         )
     }
 

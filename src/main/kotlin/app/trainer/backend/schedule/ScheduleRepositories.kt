@@ -19,18 +19,39 @@ interface TrainingSlotRepository : JpaRepository<TrainingSlotEntity, UUID> {
         to: Instant,
     ): List<TrainingSlotEntity>
 
-    fun findByClientUserIdAndStartsAtBetweenOrderByStartsAtAsc(
-        clientUserId: UUID,
-        from: Instant,
-        to: Instant,
+    @Query(
+        value = """
+            select s.* from training_slots s
+            join slot_participants p on p.slot_id = s.id
+            where p.user_id = :userId
+              and s.starts_at between :from and :to
+            order by s.starts_at
+        """,
+        nativeQuery = true,
+    )
+    fun findParticipatedBetween(
+        @Param("userId") userId: UUID,
+        @Param("from") from: Instant,
+        @Param("to") to: Instant,
     ): List<TrainingSlotEntity>
 
     fun findByStartsAtBetweenOrderByStartsAtAsc(from: Instant, to: Instant): List<TrainingSlotEntity>
 
-    fun findByCoachIdAndClientUserIdAndStartsAtAfter(
-        coachId: UUID,
-        clientUserId: UUID,
-        startsAt: Instant,
+    @Query(
+        value = """
+            select s.* from training_slots s
+            join slot_participants p on p.slot_id = s.id
+            where s.coach_id = :coachId
+              and p.user_id = :userId
+              and s.starts_at > :startsAt
+            order by s.starts_at
+        """,
+        nativeQuery = true,
+    )
+    fun findParticipatedAfter(
+        @Param("coachId") coachId: UUID,
+        @Param("userId") userId: UUID,
+        @Param("startsAt") startsAt: Instant,
     ): List<TrainingSlotEntity>
 
     @Query(
@@ -69,4 +90,17 @@ interface SlotChangeRequestRepository : JpaRepository<SlotChangeRequestEntity, U
         @Param("coachId") coachId: UUID,
         @Param("status") status: String,
     ): List<SlotChangeRequestEntity>
+}
+
+interface SlotParticipantRepository : JpaRepository<SlotParticipantEntity, UUID> {
+
+    fun findBySlotId(slotId: UUID): List<SlotParticipantEntity>
+
+    fun findBySlotIdIn(slotIds: Collection<UUID>): List<SlotParticipantEntity>
+
+    fun findBySlotIdAndUserId(slotId: UUID, userId: UUID): SlotParticipantEntity?
+
+    fun countBySlotId(slotId: UUID): Int
+
+    fun deleteBySlotIdAndUserId(slotId: UUID, userId: UUID)
 }

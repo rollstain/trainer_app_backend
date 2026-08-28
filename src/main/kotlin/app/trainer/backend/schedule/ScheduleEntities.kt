@@ -9,6 +9,8 @@ import jakarta.persistence.Table
 import java.time.Instant
 import java.util.UUID
 
+enum class SlotLifecycle { SCHEDULED, CANCELLED, COMPLETED }
+
 enum class SlotStatus { FREE, BOOKED, CANCELLED, COMPLETED }
 
 enum class SlotChangeKind { RESCHEDULE, CANCEL }
@@ -32,12 +34,12 @@ class TrainingSlotEntity(
     @Column(name = "duration_minutes")
     var durationMinutes: Int,
 
+    @Column(name = "capacity")
+    var capacity: Int,
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
-    var status: SlotStatus,
-
-    @Column(name = "client_user_id")
-    var clientUserId: UUID?,
+    var lifecycle: SlotLifecycle,
 
     @Column(name = "created_at")
     val createdAt: Instant,
@@ -73,4 +75,22 @@ class SlotChangeRequestEntity(
 
     @Column(name = "resolved_at")
     var resolvedAt: Instant?,
+)
+
+@Entity
+@Table(name = "slot_participants")
+class SlotParticipantEntity(
+
+    @Id
+    @Column(name = "id")
+    val id: UUID,
+
+    @Column(name = "slot_id")
+    val slotId: UUID,
+
+    @Column(name = "user_id")
+    val userId: UUID,
+
+    @Column(name = "created_at")
+    val createdAt: Instant,
 )

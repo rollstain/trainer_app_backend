@@ -7,7 +7,9 @@ import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.push.PushSender
-import app.trainer.backend.schedule.SlotStatus
+import app.trainer.backend.schedule.SlotLifecycle
+import app.trainer.backend.schedule.SlotParticipantEntity
+import app.trainer.backend.schedule.SlotParticipantRepository
 import app.trainer.backend.schedule.TrainingSlotEntity
 import app.trainer.backend.schedule.TrainingSlotRepository
 import app.trainer.backend.traininglog.TrainingLogEntryEntity
@@ -37,6 +39,7 @@ private const val DEFAULT_REMINDER_HOUR = 10
 private const val LATE_REMINDER_HOUR = 23
 private const val CANCELLATION_WINDOW_HOURS = 12
 private const val SLOT_DURATION_MINUTES = 60
+private const val SINGLE_SEAT = 1
 private const val AN_HOUR_IN_SECONDS = 3_600L
 
 @Suppress("UNCHECKED_CAST")
@@ -52,6 +55,7 @@ class ReminderServiceTest {
     private val coachRepository = mock(CoachRepository::class.java)
     private val coachClientRepository = mock(CoachClientRepository::class.java)
     private val reminderLogRepository = mock(ReminderLogRepository::class.java)
+    private val participantRepository = mock(SlotParticipantRepository::class.java)
     private val pushSender = mock(PushSender::class.java)
 
     @Test
@@ -91,10 +95,12 @@ class ReminderServiceTest {
     }
 
     @Test
-    fun `a free slot is nobody's session to remind about`() {
+    fun `a slot nobody signed up for is nobody's session to remind about`() {
         val service = serviceAt(MOSCOW_TEN_IN_THE_MORNING)
         `when`(slotRepository.findByStartsAtBetweenOrderByStartsAtAsc(anyNonNull(), anyNonNull()))
-            .thenReturn(listOf(slot(status = SlotStatus.FREE, clientUserId = null)))
+            .thenReturn(listOf(slot()))
+        `when`(coachRepository.findAllById(anyNonNull())).thenReturn(listOf(coach()))
+        `when`(participantRepository.findBySlotIdIn(anyNonNull())).thenReturn(emptyList())
 
         val sent = service.remindAboutSessions()
 
@@ -194,6 +200,7 @@ class ReminderServiceTest {
         checkInRepository = checkInRepository,
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
+        participantRepository = participantRepository,
         reminderLogRepository = reminderLogRepository,
         pushSender = pushSender,
         clock = Clock.fixed(now, ZoneOffset.UTC),
@@ -202,6 +209,7 @@ class ReminderServiceTest {
     private fun givenUpcomingSlot(coach: CoachEntity = coach()) {
         `when`(slotRepository.findByStartsAtBetweenOrderByStartsAtAsc(anyNonNull(), anyNonNull()))
             .thenReturn(listOf(slot()))
+        `when`(participantRepository.findBySlotIdIn(anyNonNull())).thenReturn(listOf(participation(CLIENT_USER_ID)))
         `when`(coachRepository.findAllById(eqNonNull(listOf(COACH_ID)))).thenReturn(listOf(coach))
     }
 
@@ -242,15 +250,21 @@ class ReminderServiceTest {
     )
 
     private fun slot(
-        status: SlotStatus = SlotStatus.BOOKED,
-        clientUserId: UUID? = CLIENT_USER_ID,
+        lifecycle: SlotLifecycle = SlotLifecycle.SCHEDULED,
     ): TrainingSlotEntity = TrainingSlotEntity(
         id = SLOT_ID,
         coachId = COACH_ID,
         startsAt = MOSCOW_TEN_IN_THE_MORNING.plusSeconds(AN_HOUR_IN_SECONDS),
         durationMinutes = SLOT_DURATION_MINUTES,
-        status = status,
-        clientUserId = clientUserId,
+        capacity = SINGLE_SEAT,
+        lifecycle = lifecycle,
+        createdAt = MOSCOW_TEN_IN_THE_MORNING,
+    )
+
+    private fun participation(userId: UUID): SlotParticipantEntity = SlotParticipantEntity(
+        id = UUID.randomUUID(),
+        slotId = SLOT_ID,
+        userId = userId,
         createdAt = MOSCOW_TEN_IN_THE_MORNING,
     )
 
