@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val DIALOG_STORAGE_PREFIX = "dialogs"
 private const val CHECK_IN_STORAGE_PREFIX = "check-ins"
+private const val EXERCISE_STORAGE_PREFIX = "exercises"
 
 @Service
 class MediaFileService(
@@ -153,6 +154,10 @@ class MediaFileService(
         return orphans.size
     }
 
+    @Transactional(readOnly = true)
+    fun findResponse(mediaFileId: UUID): MediaFileResponse? =
+        mediaFileRepository.findByIdOrNull(mediaFileId)?.let(::toResponse)
+
     fun toResponse(file: MediaFileEntity): MediaFileResponse = MediaFileResponse(
         id = file.id,
         contentType = file.contentType,
@@ -226,6 +231,7 @@ class MediaFileService(
         val prefix = when (ownerKind) {
             MediaOwnerKind.DIALOG_MESSAGE -> DIALOG_STORAGE_PREFIX
             MediaOwnerKind.CHECK_IN -> CHECK_IN_STORAGE_PREFIX
+            MediaOwnerKind.EXERCISE -> EXERCISE_STORAGE_PREFIX
         }
         return "$prefix/$scopeId/$mediaFileId"
     }

@@ -49,6 +49,7 @@ class DiarySummaryTest {
     private val coachRepository = mock(CoachRepository::class.java)
     private val coachClientRepository = mock(CoachClientRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
+    private val mediaFileService = mock(app.trainer.backend.media.MediaFileService::class.java)
 
     private val service = TrainingLogService(
         exerciseRepository = exerciseRepository,
@@ -57,6 +58,7 @@ class DiarySummaryTest {
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
         userRepository = userRepository,
+        mediaFileService = mediaFileService,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
 

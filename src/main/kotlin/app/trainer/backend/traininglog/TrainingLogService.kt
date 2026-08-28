@@ -2,6 +2,7 @@ package app.trainer.backend.traininglog
 
 import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
+import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
 import app.trainer.backend.config.Page
@@ -9,11 +10,17 @@ import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.config.pageSizeOf
+import app.trainer.backend.media.MediaFileResponse
+import app.trainer.backend.media.MediaFileService
+import app.trainer.backend.media.MediaOwnerKind
+import app.trainer.backend.media.PrepareUploadRequest
+import app.trainer.backend.media.PrepareUploadResponse
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -27,6 +34,7 @@ class TrainingLogService(
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
     private val userRepository: UserRepository,
+    private val mediaFileService: MediaFileService,
     private val clock: Clock,
 ) {
 
@@ -56,6 +64,56 @@ class TrainingLogService(
                 ?.takeIf { hasMore }
                 ?.let { encodeCursor(PageCursor(sortKey = it.name, id = it.id)) },
         )
+    }
+
+    @Transactional
+    fun prepareVideoUpload(coachUserId: UUID, request: PrepareUploadRequest): PrepareUploadResponse {
+        val coach = requireCoach(coachUserId)
+        return mediaFileService.prepareUpload(
+            uploaderUserId = coachUserId,
+            ownerKind = MediaOwnerKind.EXERCISE,
+            scopeId = coach.id,
+            request = request,
+        )
+    }
+
+    @Transactional
+    fun attachVideo(coachUserId: UUID, exerciseId: UUID, mediaFileId: UUID): ExerciseResponse {
+        val coach = requireCoach(coachUserId)
+        val exercise = requireOwnExercise(coachId = coach.id, exerciseId = exerciseId)
+        val linked = mediaFileService.link(
+            mediaFileIds = listOf(mediaFileId),
+            ownerKind = MediaOwnerKind.EXERCISE,
+            ownerId = exercise.id,
+            scopeId = coach.id,
+            uploaderUserId = coachUserId,
+        )
+        exercise.videoMediaFileId = mediaFileId
+        return toResponse(exercise = exercise, video = linked.firstOrNull()?.let(mediaFileService::toResponse))
+    }
+
+    @Transactional
+    fun detachVideo(coachUserId: UUID, exerciseId: UUID) {
+        val coach = requireCoach(coachUserId)
+        val exercise = requireOwnExercise(coachId = coach.id, exerciseId = exerciseId)
+        exercise.videoMediaFileId = null
+    }
+
+    private fun requireCoach(coachUserId: UUID): CoachEntity = coachRepository.findByUserId(coachUserId)
+        ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не тренер")
+
+    private fun requireOwnExercise(coachId: UUID, exerciseId: UUID): ExerciseEntity {
+        val exercise = exerciseRepository.findByIdOrNull(exerciseId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Упражнение не найдено")
+        if (exercise.coachId != coachId) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Упражнение не найдено")
+        }
+        return exercise
+    }
+
+    private fun videoOf(exercise: ExerciseEntity): MediaFileResponse? {
+        val mediaFileId = exercise.videoMediaFileId ?: return null
+        return mediaFileService.findResponse(mediaFileId)
     }
 
     @Transactional(readOnly = true)
@@ -101,6 +159,7 @@ class TrainingLogService(
                 kind = request.kind,
                 description = request.description?.trim()?.ifEmpty { null },
                 videoUrl = request.videoUrl?.trim()?.ifEmpty { null },
+                videoMediaFileId = null,
                 createdAt = Instant.now(clock),
                 archivedAt = null,
             )
@@ -283,6 +342,7 @@ class TrainingLogService(
     private fun toResponse(
         exercise: ExerciseEntity,
         latest: TrainingLogSetEntity? = null,
+        video: MediaFileResponse? = videoOf(exercise),
     ): ExerciseResponse = ExerciseResponse(
         id = exercise.id,
         name = exercise.name,
@@ -291,6 +351,7 @@ class TrainingLogService(
         isOwnedByCoach = exercise.coachId != null,
         description = exercise.description,
         videoUrl = exercise.videoUrl,
+        video = video,
         lastRepetitions = latest?.repetitions,
         lastWeightGrams = latest?.weightGrams,
         lastDurationSeconds = latest?.durationSeconds,

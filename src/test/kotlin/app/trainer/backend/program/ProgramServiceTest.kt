@@ -377,6 +377,7 @@ class ProgramServiceTest {
         kind = ExerciseKind.STRENGTH,
         description = null,
         videoUrl = null,
+        videoMediaFileId = null,
         createdAt = NOW,
         archivedAt = null,
     )

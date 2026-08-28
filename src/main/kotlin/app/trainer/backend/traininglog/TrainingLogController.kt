@@ -2,17 +2,22 @@ package app.trainer.backend.traininglog
 
 import app.trainer.backend.config.CurrentUserId
 import app.trainer.backend.config.pageResponse
+import app.trainer.backend.media.PrepareUploadRequest
+import app.trainer.backend.media.PrepareUploadResponse
 import jakarta.validation.Valid
 import java.time.LocalDate
 import java.util.UUID
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -44,6 +49,33 @@ class TrainingLogController(private val trainingLogService: TrainingLogService) 
         @Valid @RequestBody request: CreateExerciseRequest,
     ): ExerciseResponse {
         return trainingLogService.createExercise(coachUserId = coachUserId, request = request)
+    }
+
+    @PostMapping("/coach/exercises/video-uploads")
+    fun prepareVideoUpload(
+        @CurrentUserId coachUserId: UUID,
+        @Valid @RequestBody request: PrepareUploadRequest,
+    ): PrepareUploadResponse {
+        return trainingLogService.prepareVideoUpload(coachUserId = coachUserId, request = request)
+    }
+
+    @PutMapping("/coach/exercises/{exerciseId}/video")
+    fun attachVideo(
+        @CurrentUserId coachUserId: UUID,
+        @PathVariable exerciseId: UUID,
+        @Valid @RequestBody request: AttachExerciseVideoRequest,
+    ): ExerciseResponse {
+        return trainingLogService.attachVideo(
+            coachUserId = coachUserId,
+            exerciseId = exerciseId,
+            mediaFileId = request.mediaFileId,
+        )
+    }
+
+    @DeleteMapping("/coach/exercises/{exerciseId}/video")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun detachVideo(@CurrentUserId coachUserId: UUID, @PathVariable exerciseId: UUID) {
+        trainingLogService.detachVideo(coachUserId = coachUserId, exerciseId = exerciseId)
     }
 
     @GetMapping("/me/training-log")

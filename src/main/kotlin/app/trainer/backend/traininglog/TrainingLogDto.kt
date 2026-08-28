@@ -1,5 +1,6 @@
 package app.trainer.backend.traininglog
 
+import app.trainer.backend.media.MediaFileResponse
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -22,6 +23,7 @@ data class ExerciseResponse(
     val isOwnedByCoach: Boolean,
     val description: String?,
     val videoUrl: String?,
+    val video: MediaFileResponse?,
     val lastRepetitions: Int?,
     val lastWeightGrams: Int?,
     val lastDurationSeconds: Int?,
@@ -92,4 +94,8 @@ data class ClientDiarySummaryResponse(
     val linkedAt: Instant,
     val lastEntryDate: LocalDate?,
     val days: List<DiaryDayResponse>,
+)
+
+data class AttachExerciseVideoRequest(
+    val mediaFileId: UUID,
 )

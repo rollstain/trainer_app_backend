@@ -39,6 +39,9 @@ class ExerciseEntity(
     @Column(name = "video_url")
     var videoUrl: String?,
 
+    @Column(name = "video_media_file_id")
+    var videoMediaFileId: UUID?,
+
     @Column(name = "created_at")
     val createdAt: Instant,
 
