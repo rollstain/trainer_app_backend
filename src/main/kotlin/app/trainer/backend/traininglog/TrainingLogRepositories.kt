@@ -24,6 +24,10 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
             select e.* from exercises e
             where e.archived_at is null
               and (e.owner_kind = 'SHARED' or e.owner_id = any (cast(:ownerIds as uuid[])))
+              and (cast(:search as text) is null or e.name ilike '%' || cast(:search as text) || '%')
+              and (cast(:muscles as text[]) is null or e.primary_muscle = any (cast(:muscles as text[])))
+              and (cast(:equipment as text[]) is null or e.equipment = any (cast(:equipment as text[])))
+              and (cast(:ownerKind as text) is null or e.owner_kind = cast(:ownerKind as text))
               and (
                 cast(:afterName as text) is null
                 or (e.name, e.id) > (cast(:afterName as text), cast(:afterId as uuid))
@@ -35,6 +39,10 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
     )
     fun findAvailablePage(
         @Param("ownerIds") ownerIds: Array<UUID>,
+        @Param("search") search: String?,
+        @Param("muscles") muscles: Array<String>?,
+        @Param("equipment") equipment: Array<String>?,
+        @Param("ownerKind") ownerKind: String?,
         @Param("afterName") afterName: String?,
         @Param("afterId") afterId: UUID?,
         @Param("pageSize") pageSize: Int,

@@ -5,6 +5,7 @@ import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
+import app.trainer.backend.config.MAX_PAGE_SIZE
 import app.trainer.backend.config.Page
 import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
@@ -39,18 +40,27 @@ class TrainingLogService(
 ) {
 
     @Transactional(readOnly = true)
-    fun availableExercises(userId: UUID, limit: Int?, after: String?): Page<ExerciseResponse> {
+    fun availableExercises(
+        userId: UUID,
+        limit: Int?,
+        after: String?,
+        filter: ExerciseFilter = ExerciseFilter.EMPTY,
+    ): Page<ExerciseResponse> {
         val ownerIds = ownerIdsVisibleTo(userId).toTypedArray()
         val pageSize = pageSizeOf(limit)
-        val fetched = if (pageSize == null) {
+        val fetched = if (pageSize == null && filter.isEmpty) {
             exerciseRepository.findAvailable(ownerIds)
         } else {
             val cursor = decodeCursor(after)
             exerciseRepository.findAvailablePage(
                 ownerIds = ownerIds,
+                search = filter.search?.trim()?.takeIf { it.isNotEmpty() },
+                muscles = filter.muscles.takeIf { it.isNotEmpty() }?.map { it.name }?.toTypedArray(),
+                equipment = filter.equipment.takeIf { it.isNotEmpty() }?.map { it.name }?.toTypedArray(),
+                ownerKind = filter.ownerKind?.name,
                 afterName = cursor?.sortKey,
                 afterId = cursor?.id,
-                pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
+                pageSize = (pageSize ?: MAX_PAGE_SIZE) + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
             )
         }
         val exercises = if (pageSize == null) fetched else fetched.take(pageSize)

@@ -28,9 +28,23 @@ class TrainingLogController(private val trainingLogService: TrainingLogService) 
         @CurrentUserId userId: UUID,
         @RequestParam(required = false) limit: Int?,
         @RequestParam(required = false) after: String?,
+        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) muscle: List<MuscleGroup>?,
+        @RequestParam(required = false) equipment: List<Equipment>?,
+        @RequestParam(required = false) owner: ExerciseOwnerKind?,
     ): ResponseEntity<List<ExerciseResponse>> {
         return pageResponse(
-            trainingLogService.availableExercises(userId = userId, limit = limit, after = after)
+            trainingLogService.availableExercises(
+                userId = userId,
+                limit = limit,
+                after = after,
+                filter = ExerciseFilter(
+                    search = search,
+                    muscles = muscle.orEmpty(),
+                    equipment = equipment.orEmpty(),
+                    ownerKind = owner,
+                ),
+            )
         )
     }
 

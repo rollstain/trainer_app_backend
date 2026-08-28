@@ -101,3 +101,19 @@ data class ClientDiarySummaryResponse(
 data class AttachExerciseVideoRequest(
     val mediaFileId: UUID,
 )
+
+data class ExerciseFilter(
+    val search: String?,
+    val muscles: List<MuscleGroup>,
+    val equipment: List<Equipment>,
+    val ownerKind: ExerciseOwnerKind?,
+) {
+
+    val isEmpty: Boolean
+        get() = search.isNullOrBlank() && muscles.isEmpty() && equipment.isEmpty() && ownerKind == null
+
+    companion object {
+
+        val EMPTY = ExerciseFilter(search = null, muscles = emptyList(), equipment = emptyList(), ownerKind = null)
+    }
+}
