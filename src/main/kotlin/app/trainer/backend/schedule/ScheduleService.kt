@@ -159,6 +159,22 @@ class ScheduleService(
     }
 
     @Transactional
+    fun removeParticipant(coachUserId: UUID, slotId: UUID, clientUserId: UUID): CoachSlotResponse {
+        val coach = requireCoach(coachUserId)
+        val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
+        requireSlotOwnedBy(slot = slot, coach = coach)
+        if (slot.lifecycle == SlotLifecycle.COMPLETED) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Тренировка уже проведена")
+        }
+        if (participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = clientUserId) == null) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Подопечный не записан на это занятие")
+        }
+        rejectPendingRequest(slotId = slot.id)
+        freeSeat(slot = slot, userId = clientUserId)
+        return toCoachResponse(slot = slot, pendingRequestId = null)
+    }
+
+    @Transactional
     fun cancelSlot(coachUserId: UUID, slotId: UUID): CoachSlotResponse {
         val coach = requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()

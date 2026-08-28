@@ -175,6 +175,42 @@ class GroupSlotTest {
     }
 
     @Test
+    fun `the coach signs a client up and frees the seat back`() {
+        val slot = slot(capacity = GROUP_SEATS)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(participantRepository.findBySlotIdAndUserId(SLOT_ID, FIRST_CLIENT))
+            .thenReturn(participation(FIRST_CLIENT))
+        `when`(waitlistRepository.findBySlotIdOrderByCreatedAtAsc(SLOT_ID)).thenReturn(emptyList())
+
+        service.removeParticipant(
+            coachUserId = COACH_USER_ID,
+            slotId = SLOT_ID,
+            clientUserId = FIRST_CLIENT,
+        )
+
+        verify(participantRepository).delete(anyNonNull())
+    }
+
+    @Test
+    fun `removing someone who never signed up is nothing to do`() {
+        val slot = slot(capacity = GROUP_SEATS)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(participantRepository.findBySlotIdAndUserId(SLOT_ID, THIRD_CLIENT)).thenReturn(null)
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.removeParticipant(
+                coachUserId = COACH_USER_ID,
+                slotId = SLOT_ID,
+                clientUserId = THIRD_CLIENT,
+            )
+        }
+
+        assertEquals(HttpStatus.NOT_FOUND, failure.statusCode)
+    }
+
+    @Test
     fun `the coach sees who signed up and how many seats are left`() {
         val slot = slot(capacity = GROUP_SEATS)
         `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())

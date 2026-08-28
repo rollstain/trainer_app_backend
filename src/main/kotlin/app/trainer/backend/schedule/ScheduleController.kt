@@ -66,6 +66,19 @@ class ScheduleController(private val scheduleService: ScheduleService) {
         )
     }
 
+    @DeleteMapping("/slots/{slotId}/participants/{clientUserId}")
+    fun removeParticipant(
+        @CurrentUserId coachUserId: UUID,
+        @PathVariable slotId: UUID,
+        @PathVariable clientUserId: UUID,
+    ): CoachSlotResponse {
+        return scheduleService.removeParticipant(
+            coachUserId = coachUserId,
+            slotId = slotId,
+            clientUserId = clientUserId,
+        )
+    }
+
     @PostMapping("/slots/{slotId}/cancel")
     fun cancelSlot(@CurrentUserId coachUserId: UUID, @PathVariable slotId: UUID): CoachSlotResponse {
         return scheduleService.cancelSlot(coachUserId = coachUserId, slotId = slotId)
