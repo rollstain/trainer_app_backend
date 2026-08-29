@@ -49,6 +49,7 @@ class TelegramLoginService(
                 claimTokenHash = hashOf(claimToken),
                 telegramUserId = null,
                 telegramDisplayName = null,
+                telegramUsername = null,
                 targetUserId = targetUserId,
                 createdAt = now,
                 confirmedAt = null,
@@ -66,11 +67,13 @@ class TelegramLoginService(
         startCode: String,
         telegramUserId: String,
         telegramDisplayName: String?,
+        telegramUsername: String?,
     ): ConfirmedTelegramLogin? {
         val login = loginRepository.findByStartCode(startCode) ?: return null
         if (login.consumedAt != null || isExpired(login)) return null
         login.telegramUserId = telegramUserId
         login.telegramDisplayName = telegramDisplayName
+        login.telegramUsername = telegramUsername
         login.confirmedAt = Instant.now(clock)
         val targetUserId = login.targetUserId ?: return ConfirmedTelegramLogin(targetUserId = null, identity = null)
         login.consumedAt = login.confirmedAt
@@ -80,6 +83,7 @@ class TelegramLoginService(
                 provider = ExternalProvider.TELEGRAM,
                 subject = telegramUserId,
                 displayName = telegramDisplayName?.takeIf { it.isNotBlank() },
+                username = telegramUsername?.takeIf { it.isNotBlank() },
             ),
         )
     }
@@ -100,6 +104,7 @@ class TelegramLoginService(
             provider = ExternalProvider.TELEGRAM,
             subject = telegramUserId,
             displayName = login.telegramDisplayName?.takeIf { it.isNotBlank() },
+            username = login.telegramUsername?.takeIf { it.isNotBlank() },
         )
     }
 

@@ -3,8 +3,9 @@ package app.trainer.backend.user
 import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.coachrequest.AskCoachAccessRequest
+import app.trainer.backend.coachrequest.CoachAccessStatusResponse
 import app.trainer.backend.coachrequest.CoachRequestService
-import app.trainer.backend.coachrequest.CoachRequestStatusResponse
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
 import java.util.UUID
@@ -73,13 +74,16 @@ class MeController(
     }
 
     @GetMapping("/me/coach-request")
-    fun coachRequestStatus(@CurrentUserId userId: UUID): CoachRequestStatusResponse {
+    fun coachRequestStatus(@CurrentUserId userId: UUID): CoachAccessStatusResponse {
         return coachRequestService.statusOf(userId)
     }
 
     @PostMapping("/me/coach-request")
-    fun askCoachAccess(@CurrentUserId userId: UUID): CoachRequestStatusResponse {
-        return coachRequestService.ask(userId)
+    fun askCoachAccess(
+        @CurrentUserId userId: UUID,
+        @Valid @RequestBody request: AskCoachAccessRequest,
+    ): CoachAccessStatusResponse {
+        return coachRequestService.ask(userId = userId, request = request)
     }
 
     @GetMapping("/me")

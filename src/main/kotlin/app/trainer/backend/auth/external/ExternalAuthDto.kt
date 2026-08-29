@@ -23,6 +23,7 @@ data class TelegramConfirmRequest(
     @field:NotBlank
     val telegramUserId: String,
     val telegramDisplayName: String?,
+    val telegramUsername: String?,
 )
 
 data class TelegramConfirmResponse(

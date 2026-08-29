@@ -23,6 +23,9 @@ class CoachRequestEntity(
     @Column(name = "user_id")
     val userId: UUID,
 
+    @Column(name = "about")
+    var about: String,
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     var status: CoachRequestStatus,
@@ -39,4 +42,6 @@ interface CoachRequestRepository : JpaRepository<CoachRequestEntity, UUID> {
     fun findByUserId(userId: UUID): CoachRequestEntity?
 
     fun findByStatusOrderByCreatedAtAsc(status: CoachRequestStatus): List<CoachRequestEntity>
+
+    fun findByStatusNotOrderByDecidedAtDesc(status: CoachRequestStatus): List<CoachRequestEntity>
 }

@@ -38,6 +38,7 @@ class ExternalAuthController(
             startCode = request.startCode,
             telegramUserId = request.telegramUserId,
             telegramDisplayName = request.telegramDisplayName,
+            telegramUsername = request.telegramUsername,
         ) ?: throw ResponseStatusException(HttpStatus.GONE, "Ссылка входа уже недействительна")
 
         val targetUserId = confirmed.targetUserId

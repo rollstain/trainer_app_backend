@@ -59,6 +59,7 @@ class YandexIdentityVerifier(private val restClient: RestClient) : ExternalIdent
             provider = provider,
             subject = subject,
             displayName = info.realName?.takeIf { it.isNotBlank() } ?: info.displayName?.takeIf { it.isNotBlank() },
+            username = null,
         )
     }
 
@@ -93,7 +94,12 @@ class VkIdentityVerifier(
         val name = listOfNotNull(user.firstName, user.lastName)
             .filter { it.isNotBlank() }
             .joinToString(NAME_SEPARATOR)
-        return VerifiedIdentity(provider = provider, subject = subject, displayName = name.ifBlank { null })
+        return VerifiedIdentity(
+            provider = provider,
+            subject = subject,
+            displayName = name.ifBlank { null },
+            username = null,
+        )
     }
 
     data class VkUserInfoResponse(val user: VkUser?)
@@ -123,6 +129,7 @@ abstract class SignedTokenVerifier(
             provider = provider,
             subject = subject,
             displayName = jwt.getClaimAsString("name")?.takeIf { it.isNotBlank() },
+            username = null,
         )
     }
 }

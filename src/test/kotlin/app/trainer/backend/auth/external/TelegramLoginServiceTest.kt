@@ -22,6 +22,7 @@ private val NOW: Instant = Instant.parse("2026-08-29T10:00:00Z")
 private const val BOT_USERNAME = "trainer_login_bot"
 private const val TELEGRAM_USER_ID = "44417"
 private const val TELEGRAM_NAME = "Дмитрий"
+private const val TELEGRAM_USERNAME = "d_rogov"
 private const val LOGIN_TTL_MINUTES = 10L
 private val COACH_USER_ID: java.util.UUID = java.util.UUID.fromString("7d1f0f2e-0000-0000-0000-000000000001")
 
@@ -89,6 +90,7 @@ class TelegramLoginServiceTest {
                 startCode = login.startCode,
                 telegramUserId = TELEGRAM_USER_ID,
                 telegramDisplayName = TELEGRAM_NAME,
+                telegramUsername = TELEGRAM_USERNAME,
             )
         )
         val identity = service.consumeConfirmed(started.claimToken)
@@ -116,6 +118,7 @@ class TelegramLoginServiceTest {
                 startCode = login.startCode,
                 telegramUserId = TELEGRAM_USER_ID,
                 telegramDisplayName = TELEGRAM_NAME,
+                telegramUsername = TELEGRAM_USERNAME,
             ),
             "просроченную ссылку бот подтвердить не может",
         )
@@ -147,6 +150,7 @@ class TelegramLoginServiceTest {
             startCode = login.startCode,
             telegramUserId = TELEGRAM_USER_ID,
             telegramDisplayName = TELEGRAM_NAME,
+            telegramUsername = TELEGRAM_USERNAME,
         )
 
         assertNotNull(confirmed)
@@ -157,6 +161,7 @@ class TelegramLoginServiceTest {
                 startCode = login.startCode,
                 telegramUserId = TELEGRAM_USER_ID,
                 telegramDisplayName = TELEGRAM_NAME,
+                telegramUsername = TELEGRAM_USERNAME,
             ),
             "ссылку привязки нельзя использовать дважды",
         )

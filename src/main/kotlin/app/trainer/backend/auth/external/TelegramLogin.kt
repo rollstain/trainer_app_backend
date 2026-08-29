@@ -28,6 +28,9 @@ class TelegramLoginEntity(
     @Column(name = "telegram_display_name")
     var telegramDisplayName: String?,
 
+    @Column(name = "telegram_username")
+    var telegramUsername: String?,
+
     @Column(name = "target_user_id")
     val targetUserId: UUID?,
 

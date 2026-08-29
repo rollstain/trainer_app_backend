@@ -164,6 +164,7 @@ class ExternalAuthServiceTest {
                 provider = ExternalProvider.YANDEX,
                 subject = YANDEX_SUBJECT,
                 displayName = "Анна Петрова",
+                username = null,
             )
         )
     }
@@ -182,6 +183,7 @@ class ExternalAuthServiceTest {
         userId = userId,
         provider = provider,
         subjectHash = "hash",
+        username = null,
         createdAt = NOW,
     )
 }

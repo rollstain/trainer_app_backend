@@ -57,6 +57,7 @@ class ExternalAuthService(
                     userId = userId,
                     provider = verified.provider,
                     subjectHash = subjectHash,
+                    username = verified.username,
                     createdAt = Instant.now(clock),
                 )
             )
@@ -81,6 +82,7 @@ class ExternalAuthService(
                 userId = userId,
                 provider = verified.provider,
                 subjectHash = subjectHash,
+                username = verified.username,
                 createdAt = Instant.now(clock),
             )
         )
@@ -103,6 +105,7 @@ class ExternalAuthService(
                 userId = userId,
                 provider = verified.provider,
                 subjectHash = subjectHash,
+                username = verified.username,
                 createdAt = Instant.now(clock),
             )
         )
@@ -151,6 +154,7 @@ class ExternalAuthService(
                 userId = user.id,
                 provider = verified.provider,
                 subjectHash = hashOf(verified),
+                username = verified.username,
                 createdAt = now,
             )
         )

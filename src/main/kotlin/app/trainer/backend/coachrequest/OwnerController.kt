@@ -27,6 +27,12 @@ class OwnerController(
         return coachRequestService.pending()
     }
 
+    @GetMapping("/coach-requests/decided")
+    fun decided(@CurrentUserId userId: UUID): List<CoachRequestResponse> {
+        requireOwner(userId)
+        return coachRequestService.decided()
+    }
+
     @PostMapping("/coach-requests/{requestId}/approve")
     fun approve(@CurrentUserId userId: UUID, @PathVariable requestId: UUID): ApprovedCoachResponse {
         requireOwner(userId)

@@ -16,6 +16,7 @@ data class VerifiedIdentity(
     val provider: ExternalProvider,
     val subject: String,
     val displayName: String?,
+    val username: String?,
 )
 
 interface ExternalIdentityVerifier {
@@ -42,6 +43,9 @@ class ExternalIdentityEntity(
 
     @Column(name = "subject_hash")
     val subjectHash: String,
+
+    @Column(name = "username")
+    var username: String?,
 
     @Column(name = "created_at")
     val createdAt: Instant,
