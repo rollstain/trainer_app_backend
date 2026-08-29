@@ -4,7 +4,7 @@ import java.time.Instant
 import java.util.UUID
 
 data class CoachRequestStatusResponse(
-    val status: CoachRequestStatus,
+    val status: CoachRequestStatus?,
 )
 
 data class CoachRequestResponse(

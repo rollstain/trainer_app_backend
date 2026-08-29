@@ -72,6 +72,11 @@ class MeController(
         }
     }
 
+    @GetMapping("/me/coach-request")
+    fun coachRequestStatus(@CurrentUserId userId: UUID): CoachRequestStatusResponse {
+        return coachRequestService.statusOf(userId)
+    }
+
     @PostMapping("/me/coach-request")
     fun askCoachAccess(@CurrentUserId userId: UUID): CoachRequestStatusResponse {
         return coachRequestService.ask(userId)

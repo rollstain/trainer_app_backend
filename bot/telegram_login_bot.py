@@ -19,18 +19,6 @@ REPLY_LINKED = "Готово. Теперь входите в приложени�
 REPLY_LINK_DEAD = "Ссылка устарела. Начните вход в приложении заново."
 REPLY_FAILED = "Не получилось подтвердить вход. Попробуйте ещё раз через минуту."
 REPLY_HELP = "Этот бот подтверждает вход в приложение. Нажмите «Войти через Telegram» в приложении."
-REPLY_WHO = "Кто вы?"
-REPLY_CLIENT = (
-    "Откройте приложение и нажмите «Войти через Telegram». "
-    "Код от тренера введёте уже внутри."
-)
-REPLY_COACH_ASKED = (
-    "Откройте приложение, войдите через Telegram и нажмите «Я тренер» — оттуда заявка уйдёт владельцу."
-)
-BUTTON_COACH = "Я тренер"
-BUTTON_CLIENT = "Я подопечный"
-CALLBACK_COACH = "coach"
-CALLBACK_CLIENT = "client"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,27 +75,14 @@ class TelegramBot:
             raise RuntimeError(f"Telegram отказал: {answer.get('description')}")
         return answer.get("result", [])
 
-    def reply(self, chat_id, text, keyboard=None):
-        payload = {"chat_id": chat_id, "text": text}
-        if keyboard is not None:
-            payload["reply_markup"] = {"inline_keyboard": keyboard}
+    def reply(self, chat_id, text):
         post_json(
             url=f"{TELEGRAM_API}/bot{self.settings.bot_token}/sendMessage",
-            payload=payload,
-        )
-
-    def answer_callback(self, callback_id):
-        post_json(
-            url=f"{TELEGRAM_API}/bot{self.settings.bot_token}/answerCallbackQuery",
-            payload={"callback_query_id": callback_id},
+            payload={"chat_id": chat_id, "text": text},
         )
 
     def accept(self, update):
         self.offset = update["update_id"] + 1
-        callback = update.get("callback_query")
-        if callback:
-            self.accept_choice(callback)
-            return
         message = update.get("message")
         if not message:
             return
@@ -117,25 +92,7 @@ class TelegramBot:
         if start_code is not None:
             self.reply(chat_id, self.confirm(start_code=start_code, sender=message.get("from", {})))
             return
-        if text.strip() == START_COMMAND:
-            self.reply(chat_id, REPLY_WHO, keyboard=who_keyboard())
-            return
         self.reply(chat_id, REPLY_HELP)
-
-    def accept_choice(self, callback):
-        self.answer_callback(callback["id"])
-        chat_id = callback["message"]["chat"]["id"]
-        if callback.get("data") == CALLBACK_COACH:
-            self.reply(chat_id, REPLY_COACH_ASKED)
-            return
-        self.reply(chat_id, REPLY_CLIENT)
-
-def who_keyboard():
-    return [
-        [{"text": BUTTON_COACH, "callback_data": CALLBACK_COACH}],
-        [{"text": BUTTON_CLIENT, "callback_data": CALLBACK_CLIENT}],
-    ]
-
 
 def is_poll_timeout(failure):
     if isinstance(failure, socket.timeout):

@@ -45,6 +45,15 @@ class CoachRequestService(
     }
 
     @Transactional(readOnly = true)
+    fun statusOf(userId: UUID): CoachRequestStatusResponse {
+        if (coachRepository.findByUserId(userId) != null) {
+            return CoachRequestStatusResponse(status = CoachRequestStatus.APPROVED)
+        }
+        val known = requestRepository.findByUserId(userId)
+        return CoachRequestStatusResponse(status = known?.status)
+    }
+
+    @Transactional(readOnly = true)
     fun pending(): List<CoachRequestResponse> = requestRepository
         .findByStatusOrderByCreatedAtAsc(CoachRequestStatus.PENDING)
         .mapNotNull { request ->
