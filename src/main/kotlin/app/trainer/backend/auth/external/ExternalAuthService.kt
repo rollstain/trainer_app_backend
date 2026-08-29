@@ -2,25 +2,25 @@ package app.trainer.backend.auth.external
 
 import app.trainer.backend.auth.AuthTokensResponse
 import app.trainer.backend.auth.SessionOpener
+import app.trainer.backend.auth.password.PasswordCredentialRepository
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
-import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
-import java.util.Base64
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
-private const val SUBJECT_SEPARATOR = ":"
 private const val ONLY_WAY_IN = 1
+private const val PASSWORD_IS_A_WAY_IN = 1
 
 @Service
 class ExternalAuthService(
     private val identityRepository: ExternalIdentityRepository,
     private val userRepository: UserRepository,
+    private val credentialRepository: PasswordCredentialRepository,
     private val sessionOpener: SessionOpener,
     verifiers: List<ExternalIdentityVerifier>,
     private val clock: Clock,
@@ -33,7 +33,7 @@ class ExternalAuthService(
         val verified = verify(provider = request.provider, token = request.token)
         val known = identityRepository.findByProviderAndSubjectHash(
             provider = verified.provider,
-            subjectHash = hashOf(verified),
+            subjectHash = subjectHashOf(verified),
         )
         val userId = known?.userId ?: registerUser(verified)
         return sessionOpener.openSession(userId = userId, deviceInfo = request.deviceInfo)
@@ -42,7 +42,7 @@ class ExternalAuthService(
     @Transactional
     fun link(userId: UUID, request: LinkIdentityRequest): List<LinkedIdentityResponse> {
         val verified = verify(provider = request.provider, token = request.token)
-        val subjectHash = hashOf(verified)
+        val subjectHash = subjectHashOf(verified)
         val owner = identityRepository.findByProviderAndSubjectHash(
             provider = verified.provider,
             subjectHash = subjectHash,
@@ -67,7 +67,7 @@ class ExternalAuthService(
 
     @Transactional
     fun linkVerified(userId: UUID, verified: VerifiedIdentity) {
-        val subjectHash = hashOf(verified)
+        val subjectHash = subjectHashOf(verified)
         val owner = identityRepository.findByProviderAndSubjectHash(
             provider = verified.provider,
             subjectHash = subjectHash,
@@ -90,7 +90,7 @@ class ExternalAuthService(
 
     @Transactional
     fun claimVerified(userId: UUID, verified: VerifiedIdentity) {
-        val subjectHash = hashOf(verified)
+        val subjectHash = subjectHashOf(verified)
         val owner = identityRepository.findByProviderAndSubjectHash(
             provider = verified.provider,
             subjectHash = subjectHash,
@@ -114,7 +114,8 @@ class ExternalAuthService(
     @Transactional
     fun unlink(userId: UUID, provider: ExternalProvider): List<LinkedIdentityResponse> {
         val identities = identityRepository.findByUserId(userId)
-        if (identities.size <= ONLY_WAY_IN) {
+        val waysIn = identities.size + if (credentialRepository.existsById(userId)) PASSWORD_IS_A_WAY_IN else 0
+        if (waysIn <= ONLY_WAY_IN) {
             throw ResponseStatusException(
                 HttpStatus.CONFLICT,
                 "Это единственный способ входа — сначала привяжите другой",
@@ -145,6 +146,7 @@ class ExternalAuthService(
                 displayName = verified.displayName.orEmpty(),
                 phone = null,
                 email = null,
+                login = null,
                 createdAt = now,
             )
         )
@@ -153,17 +155,11 @@ class ExternalAuthService(
                 id = UUID.randomUUID(),
                 userId = user.id,
                 provider = verified.provider,
-                subjectHash = hashOf(verified),
+                subjectHash = subjectHashOf(verified),
                 username = verified.username,
                 createdAt = now,
             )
         )
         return user.id
-    }
-
-    private fun hashOf(verified: VerifiedIdentity): String {
-        val source = verified.provider.name + SUBJECT_SEPARATOR + verified.subject
-        val digest = MessageDigest.getInstance("SHA-256").digest(source.toByteArray())
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(digest)
     }
 }

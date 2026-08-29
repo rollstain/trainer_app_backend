@@ -14,7 +14,7 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val START_CODE_BYTES = 12
 private const val CLAIM_TOKEN_BYTES = 32
-private const val LOGIN_TTL_MINUTES = 10L
+private const val LOGIN_TTL_MINUTES = 15L
 private const val CLAIM_TTL_MINUTES = 1440L
 private const val FORGOTTEN_LOGIN_HOURS = 1L
 

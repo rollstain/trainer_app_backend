@@ -3,7 +3,9 @@ package app.trainer.backend.config
 import app.trainer.backend.auth.AuthProperties
 import app.trainer.backend.auth.external.ExternalAuthProperties
 import app.trainer.backend.auth.external.TelegramProperties
+import app.trainer.backend.legal.LegalProperties
 import app.trainer.backend.link.InviteLinkProperties
+import app.trainer.backend.mail.MailProperties
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import javax.crypto.spec.SecretKeySpec
 import org.springframework.boot.context.properties.EnableConfigurationProperties
@@ -12,6 +14,8 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpMethod
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.oauth2.jwt.JwtEncoder
@@ -21,6 +25,7 @@ import org.springframework.security.web.SecurityFilterChain
 
 private const val JWT_SECRET_MIN_LENGTH = 32
 private const val HMAC_ALGORITHM = "HmacSHA256"
+private const val BCRYPT_STRENGTH = 12
 
 @Configuration
 @EnableConfigurationProperties(
@@ -28,10 +33,15 @@ private const val HMAC_ALGORITHM = "HmacSHA256"
     ExternalAuthProperties::class,
     TelegramProperties::class,
     InviteLinkProperties::class,
+    LegalProperties::class,
+    MailProperties::class,
 )
 class SecurityConfig(private val properties: AuthProperties) {
 
     private val secretKey = SecretKeySpec(requireStrongSecret().toByteArray(), HMAC_ALGORITHM)
+
+    @Bean
+    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder(BCRYPT_STRENGTH)
 
     @Bean
     fun jwtEncoder(): JwtEncoder = NimbusJwtEncoder(ImmutableSecret(secretKey))
@@ -51,9 +61,16 @@ class SecurityConfig(private val properties: AuthProperties) {
                 it.requestMatchers(HttpMethod.GET, "/auth/invites/*").permitAll()
                 it.requestMatchers("/auth/invites/redeem", "/auth/refresh", "/auth/external").permitAll()
                 it.requestMatchers("/auth/telegram/start", "/auth/telegram/confirm").permitAll()
+                it.requestMatchers(
+                    "/auth/password/sign-up",
+                    "/auth/password/sign-in",
+                    "/auth/password/forgot",
+                    "/auth/password/reset/telegram",
+                    "/auth/password/reset/email",
+                ).permitAll()
                 it.requestMatchers("/admin/**").permitAll()
                 it.requestMatchers("/ws/**").permitAll()
-                it.requestMatchers("/i/*", "/.well-known/**").permitAll()
+                it.requestMatchers("/i/*", "/r/*", "/legal/*", "/.well-known/**").permitAll()
                 it.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 it.anyRequest().authenticated()
             }

@@ -131,6 +131,7 @@ class AuthService(
                 displayName = name,
                 phone = null,
                 email = null,
+                login = null,
                 createdAt = now,
             )
         )

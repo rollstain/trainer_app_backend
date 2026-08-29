@@ -2,6 +2,7 @@ package app.trainer.backend.auth.external
 
 import app.trainer.backend.auth.AuthTokensResponse
 import app.trainer.backend.auth.SessionOpener
+import app.trainer.backend.auth.password.PasswordCredentialRepository
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
@@ -33,6 +34,7 @@ class ExternalAuthServiceTest {
 
     private val identityRepository = mock(ExternalIdentityRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
+    private val credentialRepository = mock(PasswordCredentialRepository::class.java)
     private val sessionOpener = mock(SessionOpener::class.java)
     private val yandex = mock(ExternalIdentityVerifier::class.java)
 
@@ -41,6 +43,7 @@ class ExternalAuthServiceTest {
         ExternalAuthService(
             identityRepository = identityRepository,
             userRepository = userRepository,
+            credentialRepository = credentialRepository,
             sessionOpener = sessionOpener,
             verifiers = listOf(yandex),
             clock = Clock.fixed(NOW, ZoneOffset.UTC),

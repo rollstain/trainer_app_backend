@@ -9,6 +9,11 @@ data class AuthProperties(
     val refreshTokenAbsoluteDays: Long,
     val refreshRotationGraceSeconds: Long,
     val inviteTtlHours: Long,
+    val passwordMaxFailedAttempts: Int,
+    val passwordLockMinutes: Long,
+    val passwordLockMaxMinutes: Long,
+    val passwordResetTtlMinutes: Long,
+    val passwordResetResendSeconds: Long,
     val jwtSecret: String,
     val adminToken: String,
 )

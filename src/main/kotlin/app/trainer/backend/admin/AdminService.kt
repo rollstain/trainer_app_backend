@@ -6,6 +6,7 @@ import app.trainer.backend.auth.InviteEntity
 import app.trainer.backend.auth.InviteRepository
 import app.trainer.backend.auth.external.TelegramLoginService
 import app.trainer.backend.auth.external.TelegramStartResponse
+import app.trainer.backend.auth.password.normalizedEmailOrNull
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.user.UserEntity
@@ -38,7 +39,10 @@ class AdminService(
     fun onboardCoach(request: CreateCoachRequest): CoachOnboardedResponse {
         val now = Instant.now(clock)
         val phone = request.phone?.trim()?.ifEmpty { null }
-        val email = request.email?.trim()?.ifEmpty { null }
+        val email = request.email?.trim()?.ifEmpty { null }?.let {
+            normalizedEmailOrNull(it)
+                ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Проверьте адрес почты")
+        }
         requireContactIsFree(phone = phone, email = email)
         val user = userRepository.save(
             UserEntity(
@@ -46,6 +50,7 @@ class AdminService(
                 displayName = request.displayName.trim(),
                 phone = phone,
                 email = email,
+                login = null,
                 createdAt = now,
             )
         )

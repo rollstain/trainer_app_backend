@@ -327,6 +327,7 @@ class GroupSlotTest {
         displayName = "Анна",
         phone = null,
         email = null,
+        login = null,
         createdAt = NOW,
     )
 

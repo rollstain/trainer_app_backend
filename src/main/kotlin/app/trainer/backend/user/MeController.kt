@@ -1,11 +1,14 @@
 package app.trainer.backend.user
 
+import app.trainer.backend.auth.password.PasswordStore
+import app.trainer.backend.auth.password.normalizedEmailOrNull
 import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.coach.CoachSignUpService
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
+import java.time.Instant
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -22,6 +25,9 @@ data class MeResponse(
     val displayName: String,
     val phone: String?,
     val email: String?,
+    val login: String?,
+    val hasPassword: Boolean,
+    val passwordUpdatedAt: Instant?,
     val coachId: UUID?,
     val zoneId: String?,
     val hasCoach: Boolean,
@@ -35,6 +41,7 @@ data class BecomeCoachRequest(
 data class UpdateContactRequest(
     val phone: String?,
     val email: String?,
+    val currentPassword: String?,
 )
 
 @RestController
@@ -42,6 +49,7 @@ class MeController(
     private val userRepository: UserRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
+    private val passwordStore: PasswordStore,
     private val coachSignUpService: CoachSignUpService,
 ) {
 
@@ -54,14 +62,28 @@ class MeController(
         val user = userRepository.findByIdOrNull(userId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден")
         val phone = request.phone?.trim()?.ifEmpty { null }
-        val email = request.email?.trim()?.ifEmpty { null }
+        val email = request.email?.trim()?.ifEmpty { null }?.let {
+            normalizedEmailOrNull(it)
+                ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Проверьте адрес почты")
+        }
         if (phone == null && email == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите телефон или почту")
+        }
+        if (email != null && email != user.email) {
+            requireCurrentPassword(userId = userId, provided = request.currentPassword)
         }
         requireContactIsFree(userId = userId, phone = phone, email = email)
         if (phone != null) user.phone = phone
         if (email != null) user.email = email
         return toResponse(user)
+    }
+
+    private fun requireCurrentPassword(userId: UUID, provided: String?) {
+        val credential = passwordStore.credentialOf(userId) ?: return
+        val matches = provided != null && passwordStore.matches(credential = credential, password = provided)
+        if (!matches) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Текущий пароль неверен")
+        }
     }
 
     private fun requireContactIsFree(userId: UUID, phone: String?, email: String?) {
@@ -97,11 +119,15 @@ class MeController(
 
     private fun toResponse(user: UserEntity): MeResponse {
         val coach = coachRepository.findByUserId(user.id)
+        val credential = passwordStore.credentialOf(user.id)
         return MeResponse(
             userId = user.id,
             displayName = user.displayName,
             phone = user.phone,
             email = user.email,
+            login = user.login,
+            hasPassword = credential != null,
+            passwordUpdatedAt = credential?.updatedAt,
             coachId = coach?.id,
             zoneId = coach?.zoneId,
             hasCoach = coachClientRepository

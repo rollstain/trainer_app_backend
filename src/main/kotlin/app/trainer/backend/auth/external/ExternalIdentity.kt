@@ -6,11 +6,21 @@ import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
 import jakarta.persistence.Table
+import java.security.MessageDigest
 import java.time.Instant
+import java.util.Base64
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
 
+private const val SUBJECT_SEPARATOR = ":"
+
 enum class ExternalProvider { YANDEX, VK, APPLE, GOOGLE, TELEGRAM }
+
+fun subjectHashOf(verified: VerifiedIdentity): String {
+    val source = verified.provider.name + SUBJECT_SEPARATOR + verified.subject
+    val digest = MessageDigest.getInstance("SHA-256").digest(source.toByteArray())
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(digest)
+}
 
 data class VerifiedIdentity(
     val provider: ExternalProvider,

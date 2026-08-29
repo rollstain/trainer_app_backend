@@ -1,6 +1,7 @@
 package app.trainer.backend.config
 
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
@@ -17,6 +18,7 @@ data class ApiErrorResponse(
     val status: Int,
     val message: String,
     val fieldErrors: Map<String, String>,
+    val retryAfterSeconds: Long?,
 )
 
 @RestControllerAdvice
@@ -29,7 +31,38 @@ class ApiErrorHandler {
         val status = HttpStatus.valueOf(failure.statusCode.value())
         val message = failure.reason ?: status.reasonPhrase
         return ResponseEntity.status(status).body(
-            ApiErrorResponse(status = status.value(), message = message, fieldErrors = emptyMap())
+            ApiErrorResponse(
+                status = status.value(),
+                message = message,
+                fieldErrors = emptyMap(),
+                retryAfterSeconds = null,
+            )
+        )
+    }
+
+    @ExceptionHandler(TooManyAttemptsException::class)
+    fun handleTooManyAttempts(failure: TooManyAttemptsException): ResponseEntity<ApiErrorResponse> {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+            .header(HttpHeaders.RETRY_AFTER, failure.retryAfterSeconds.toString())
+            .body(
+                ApiErrorResponse(
+                    status = HttpStatus.TOO_MANY_REQUESTS.value(),
+                    message = failure.explanation,
+                    fieldErrors = emptyMap(),
+                    retryAfterSeconds = failure.retryAfterSeconds,
+                )
+            )
+    }
+
+    @ExceptionHandler(FieldConflictException::class)
+    fun handleFieldConflict(failure: FieldConflictException): ResponseEntity<ApiErrorResponse> {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+            ApiErrorResponse(
+                status = HttpStatus.CONFLICT.value(),
+                message = failure.explanation,
+                fieldErrors = mapOf(failure.field to failure.explanation),
+                retryAfterSeconds = null,
+            )
         )
     }
 
@@ -43,6 +76,7 @@ class ApiErrorHandler {
                 status = HttpStatus.BAD_REQUEST.value(),
                 message = VALIDATION_FAILURE_MESSAGE,
                 fieldErrors = fieldErrors,
+                retryAfterSeconds = null,
             )
         )
     }
@@ -55,6 +89,7 @@ class ApiErrorHandler {
                 status = HttpStatus.BAD_REQUEST.value(),
                 message = MALFORMED_BODY_MESSAGE,
                 fieldErrors = emptyMap(),
+                retryAfterSeconds = null,
             )
         )
     }
@@ -67,6 +102,7 @@ class ApiErrorHandler {
                 status = HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 message = UNEXPECTED_FAILURE_MESSAGE,
                 fieldErrors = emptyMap(),
+                retryAfterSeconds = null,
             )
         )
     }

@@ -24,6 +24,9 @@ class UserEntity(
     @Column(name = "email")
     var email: String?,
 
+    @Column(name = "login")
+    var login: String?,
+
     @Column(name = "created_at")
     val createdAt: Instant,
 )

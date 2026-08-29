@@ -173,6 +173,7 @@ class DiarySummaryTest {
         displayName = displayName,
         phone = null,
         email = null,
+        login = null,
         createdAt = NOW,
     )
 

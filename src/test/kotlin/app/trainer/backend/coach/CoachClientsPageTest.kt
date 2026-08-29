@@ -165,6 +165,7 @@ class CoachClientsPageTest {
                 displayName = namesById.getValue(link.userId),
                 phone = null,
                 email = null,
+                login = null,
                 createdAt = NOW,
             )
         }

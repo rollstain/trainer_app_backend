@@ -23,7 +23,7 @@ private const val BOT_USERNAME = "trainer_login_bot"
 private const val TELEGRAM_USER_ID = "44417"
 private const val TELEGRAM_NAME = "Дмитрий"
 private const val TELEGRAM_USERNAME = "d_rogov"
-private const val LOGIN_TTL_MINUTES = 10L
+private const val LOGIN_TTL_MINUTES = 15L
 private val COACH_USER_ID: java.util.UUID = java.util.UUID.fromString("7d1f0f2e-0000-0000-0000-000000000001")
 
 @Suppress("UNCHECKED_CAST")
