@@ -51,7 +51,6 @@ class SecurityConfig(private val properties: AuthProperties) {
                 it.requestMatchers(HttpMethod.GET, "/auth/invites/*").permitAll()
                 it.requestMatchers("/auth/invites/redeem", "/auth/refresh", "/auth/external").permitAll()
                 it.requestMatchers("/auth/telegram/start", "/auth/telegram/confirm").permitAll()
-                it.requestMatchers("/auth/telegram/coach-request").permitAll()
                 it.requestMatchers("/admin/**").permitAll()
                 it.requestMatchers("/ws/**").permitAll()
                 it.requestMatchers("/i/*", "/.well-known/**").permitAll()

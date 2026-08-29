@@ -132,6 +132,7 @@ class MissedSessionsTest {
         sessionRemindersEnabled = true,
         diaryRemindersEnabled = true,
         checkInRemindersEnabled = true,
+        isOwner = false,
         createdAt = NOW,
     )
 }

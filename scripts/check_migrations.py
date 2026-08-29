@@ -4,13 +4,10 @@ import re
 import sys
 
 MIGRATIONS = pathlib.Path(__file__).resolve().parent.parent / "src/main/resources/db/migration"
-CREATES = re.compile(r"create\s+(?:unique\s+)?index\s+([a-z0-9_]+)|create\s+table\s+([a-z0-9_]+)", re.I)
+CREATE_INDEX = re.compile(r"create\s+(?:unique\s+)?index\s+([a-z0-9_]+)\s+on\s+([a-z0-9_]+)", re.I)
+CREATE_TABLE = re.compile(r"create\s+table\s+([a-z0-9_]+)", re.I)
 DROPS = re.compile(r"drop\s+(?:index|table)\s+(?:if\s+exists\s+)?([a-z0-9_]+)", re.I)
 VERSION = re.compile(r"^V(\d+)__")
-
-
-def names(pattern, text):
-    return {group.lower() for match in pattern.finditer(text) for group in match.groups() if group}
 
 
 def main():
@@ -19,15 +16,22 @@ def main():
         key=lambda pair: pair[0],
     )
     created_by = {}
+    table_of_index = {}
     failures = []
     for version, path in migrations:
         text = path.read_text(encoding="utf-8")
-        recreated = names(DROPS, text)
-        for name in names(CREATES, text):
+        dropped = {match.group(1).lower() for match in DROPS.finditer(text)}
+        dropped |= {index for index, table in table_of_index.items() if table in dropped}
+
+        created = [(match.group(1).lower(), match.group(2).lower()) for match in CREATE_INDEX.finditer(text)]
+        created += [(match.group(1).lower(), None) for match in CREATE_TABLE.finditer(text)]
+        for name, table in created:
             owner = created_by.get(name)
-            if owner and name not in recreated:
+            if owner and name not in dropped:
                 failures.append(f"V{version} создаёт '{name}', уже созданный в {owner}")
             created_by[name] = path.name
+            if table is not None:
+                table_of_index[name] = table
 
     for failure in failures:
         print(failure)

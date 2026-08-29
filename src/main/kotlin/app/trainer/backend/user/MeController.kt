@@ -3,6 +3,8 @@ package app.trainer.backend.user
 import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.coachrequest.CoachRequestService
+import app.trainer.backend.coachrequest.CoachRequestStatusResponse
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
 import java.util.UUID
@@ -11,6 +13,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
+import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
@@ -23,6 +26,7 @@ data class MeResponse(
     val coachId: UUID?,
     val zoneId: String?,
     val hasCoach: Boolean,
+    val isOwner: Boolean,
 )
 
 data class UpdateContactRequest(
@@ -35,6 +39,7 @@ class MeController(
     private val userRepository: UserRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
+    private val coachRequestService: CoachRequestService,
 ) {
 
     @PatchMapping("/me/contact")
@@ -67,6 +72,11 @@ class MeController(
         }
     }
 
+    @PostMapping("/me/coach-request")
+    fun askCoachAccess(@CurrentUserId userId: UUID): CoachRequestStatusResponse {
+        return coachRequestService.ask(userId)
+    }
+
     @GetMapping("/me")
     fun me(@CurrentUserId userId: UUID): MeResponse {
         val user = userRepository.findByIdOrNull(userId)
@@ -83,6 +93,7 @@ class MeController(
             email = user.email,
             coachId = coach?.id,
             zoneId = coach?.zoneId,
+            isOwner = coach?.isOwner == true,
             hasCoach = coachClientRepository
                 .findByUserId(user.id)
                 .any { it.status == CoachClientStatus.ACTIVE },

@@ -1,9 +1,6 @@
 package app.trainer.backend.auth.external
 
 import app.trainer.backend.auth.AuthTokensResponse
-import app.trainer.backend.coachrequest.AskCoachAccessRequest
-import app.trainer.backend.coachrequest.CoachRequestService
-import app.trainer.backend.coachrequest.CoachRequestStatusResponse
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
 import java.security.MessageDigest
@@ -26,7 +23,6 @@ class ExternalAuthController(
     private val externalAuthService: ExternalAuthService,
     private val telegramLoginService: TelegramLoginService,
     private val telegramProperties: TelegramProperties,
-    private val coachRequestService: CoachRequestService,
 ) {
 
     @PostMapping("/auth/telegram/start")
@@ -49,21 +45,8 @@ class ExternalAuthController(
         if (targetUserId == null || identity == null) {
             return TelegramConfirmResponse(kind = TelegramConfirmKind.LOGIN)
         }
-        externalAuthService.linkVerified(userId = targetUserId, verified = identity)
+        externalAuthService.claimVerified(userId = targetUserId, verified = identity)
         return TelegramConfirmResponse(kind = TelegramConfirmKind.LINK)
-    }
-
-    @PostMapping("/auth/telegram/coach-request")
-    fun askCoachAccess(
-        @RequestHeader(name = BOT_SECRET_HEADER, required = false) secret: String?,
-        @Valid @RequestBody request: AskCoachAccessRequest,
-    ): CoachRequestStatusResponse {
-        authorizeBot(secret)
-        val status = coachRequestService.ask(
-            telegramUserId = request.telegramUserId,
-            telegramDisplayName = request.telegramDisplayName,
-        )
-        return CoachRequestStatusResponse(status = status)
     }
 
     @PostMapping("/auth/external")

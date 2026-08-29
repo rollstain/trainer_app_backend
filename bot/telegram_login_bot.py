@@ -24,8 +24,9 @@ REPLY_CLIENT = (
     "Откройте приложение и нажмите «Войти через Telegram». "
     "Код от тренера введёте уже внутри."
 )
-REPLY_COACH_ASKED = "Заявка отправлена. Владелец её рассмотрит и откроет вам доступ тренера."
-REPLY_COACH_APPROVED = "Доступ тренера уже открыт. Входите в приложении кнопкой «Войти через Telegram»."
+REPLY_COACH_ASKED = (
+    "Откройте приложение, войдите через Telegram и нажмите «Я тренер» — оттуда заявка уйдёт владельцу."
+)
 BUTTON_COACH = "Я тренер"
 BUTTON_CLIENT = "Я подопечный"
 CALLBACK_COACH = "coach"
@@ -45,7 +46,6 @@ class Settings:
         self.bot_token = require_env("TELEGRAM_BOT_TOKEN")
         self.bot_secret = require_env("TELEGRAM_BOT_SECRET")
         self.api_url = require_env("TRAINER_API_URL").rstrip("/")
-        self.owner_chat_id = os.environ.get("TELEGRAM_OWNER_CHAT_ID", "").strip()
 
 
 def require_env(name):
@@ -102,12 +102,6 @@ class TelegramBot:
             payload={"callback_query_id": callback_id},
         )
 
-    def tell_owner(self, text):
-        owner = self.settings.owner_chat_id
-        if not owner:
-            return
-        self.reply(owner, text)
-
     def accept(self, update):
         self.offset = update["update_id"] + 1
         callback = update.get("callback_query")
@@ -131,57 +125,10 @@ class TelegramBot:
     def accept_choice(self, callback):
         self.answer_callback(callback["id"])
         chat_id = callback["message"]["chat"]["id"]
-        sender = callback.get("from", {})
         if callback.get("data") == CALLBACK_COACH:
-            self.reply(chat_id, self.ask_coach_access(sender))
+            self.reply(chat_id, REPLY_COACH_ASKED)
             return
         self.reply(chat_id, REPLY_CLIENT)
-
-    def ask_coach_access(self, sender):
-        payload = {
-            "telegramUserId": str(sender.get("id")),
-            "telegramDisplayName": display_name_of(sender),
-        }
-        try:
-            _, answer = post_json(
-                url=f"{self.settings.api_url}/auth/telegram/coach-request",
-                payload=payload,
-                headers={"X-Telegram-Bot-Secret": self.settings.bot_secret},
-            )
-        except (urllib.error.HTTPError, urllib.error.URLError) as failure:
-            logger.error("заявка не ушла: %s", failure)
-            return REPLY_FAILED
-        if (answer or {}).get("status") == "APPROVED":
-            return REPLY_COACH_APPROVED
-        logger.info("заявка тренера от %s", payload["telegramUserId"])
-        self.tell_owner(
-            f"Заявка на доступ тренера: {payload['telegramDisplayName'] or 'без имени'} "
-            f"(telegram id {payload['telegramUserId']})"
-        )
-        return REPLY_COACH_ASKED
-
-    def confirm(self, start_code, sender):
-        payload = {
-            "startCode": start_code,
-            "telegramUserId": str(sender.get("id")),
-            "telegramDisplayName": display_name_of(sender),
-        }
-        try:
-            status, answer = post_json(
-                url=f"{self.settings.api_url}/auth/telegram/confirm",
-                payload=payload,
-                headers={"X-Telegram-Bot-Secret": self.settings.bot_secret},
-            )
-            kind = (answer or {}).get("kind")
-            logger.info("подтверждено, статус %s, вид %s", status, kind)
-            return REPLY_LINKED if kind == "LINK" else REPLY_CONFIRMED
-        except urllib.error.HTTPError as failure:
-            logger.warning("сервер отказал: %s", failure.code)
-            return REPLY_LINK_DEAD if failure.code == 410 else REPLY_FAILED
-        except urllib.error.URLError as failure:
-            logger.error("сервер недоступен: %s", failure.reason)
-            return REPLY_FAILED
-
 
 def who_keyboard():
     return [

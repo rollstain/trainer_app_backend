@@ -255,6 +255,7 @@ class ReminderServiceTest {
         sessionRemindersEnabled = sessionRemindersEnabled,
         diaryRemindersEnabled = diaryRemindersEnabled,
         checkInRemindersEnabled = checkInRemindersEnabled,
+        isOwner = false,
         createdAt = MOSCOW_TEN_IN_THE_MORNING,
     )
 

@@ -98,6 +98,7 @@ class CoachServiceArchiveTest {
                 sessionRemindersEnabled = true,
                 diaryRemindersEnabled = true,
                 checkInRemindersEnabled = true,
+                isOwner = false,
                 createdAt = CREATED_AT,
             )
         )

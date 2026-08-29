@@ -200,6 +200,7 @@ class FormCheckServiceTest {
         sessionRemindersEnabled = true,
         diaryRemindersEnabled = true,
         checkInRemindersEnabled = true,
+        isOwner = false,
         createdAt = NOW,
     )
 

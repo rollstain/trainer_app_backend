@@ -91,6 +91,16 @@ class AdminController(
         coachRequestService.decline(requestId)
     }
 
+    @PostMapping("/coaches/{coachId}/owner")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun makeOwner(
+        @RequestHeader(name = ADMIN_TOKEN_HEADER, required = false) token: String?,
+        @PathVariable coachId: UUID,
+    ) {
+        authorize(token)
+        adminService.makeOwner(coachId)
+    }
+
     private fun authorize(token: String?) {
         val configured = properties.adminToken
         if (configured.length < ADMIN_TOKEN_MIN_LENGTH) {

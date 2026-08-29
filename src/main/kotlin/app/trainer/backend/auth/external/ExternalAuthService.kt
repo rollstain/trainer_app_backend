@@ -87,6 +87,28 @@ class ExternalAuthService(
     }
 
     @Transactional
+    fun claimVerified(userId: UUID, verified: VerifiedIdentity) {
+        val subjectHash = hashOf(verified)
+        val owner = identityRepository.findByProviderAndSubjectHash(
+            provider = verified.provider,
+            subjectHash = subjectHash,
+        )
+        if (owner != null && owner.userId == userId) return
+        if (owner != null) {
+            identityRepository.delete(owner)
+        }
+        identityRepository.save(
+            ExternalIdentityEntity(
+                id = UUID.randomUUID(),
+                userId = userId,
+                provider = verified.provider,
+                subjectHash = subjectHash,
+                createdAt = Instant.now(clock),
+            )
+        )
+    }
+
+    @Transactional
     fun unlink(userId: UUID, provider: ExternalProvider): List<LinkedIdentityResponse> {
         val identities = identityRepository.findByUserId(userId)
         if (identities.size <= ONLY_WAY_IN) {

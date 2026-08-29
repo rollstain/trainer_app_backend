@@ -59,6 +59,7 @@ class AdminService(
                 sessionRemindersEnabled = true,
                 diaryRemindersEnabled = true,
                 checkInRemindersEnabled = true,
+                isOwner = false,
                 createdAt = now,
             )
         )
@@ -88,6 +89,34 @@ class AdminService(
         val coach = coachRepository.findByIdOrNull(coachId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
         return telegramLoginService.startClaim(targetUserId = coach.userId)
+    }
+
+    @Transactional
+    fun promoteToCoach(userId: UUID, zoneId: String): CoachEntity {
+        val user = userRepository.findByIdOrNull(userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден")
+        coachRepository.findByUserId(user.id)?.let { return it }
+        return coachRepository.save(
+            CoachEntity(
+                id = UUID.randomUUID(),
+                userId = user.id,
+                zoneId = zoneId.trim(),
+                cancellationWindowHours = DEFAULT_CANCELLATION_WINDOW_HOURS,
+                reminderHour = DEFAULT_REMINDER_HOUR,
+                sessionRemindersEnabled = true,
+                diaryRemindersEnabled = true,
+                checkInRemindersEnabled = true,
+                isOwner = false,
+                createdAt = Instant.now(clock),
+            )
+        )
+    }
+
+    @Transactional
+    fun makeOwner(coachId: UUID) {
+        val coach = coachRepository.findByIdOrNull(coachId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
+        coach.isOwner = true
     }
 
     private fun mintLoginCode(coach: CoachEntity, now: Instant): InviteEntity {

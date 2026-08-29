@@ -20,11 +20,8 @@ class CoachRequestEntity(
     @Column(name = "id")
     val id: UUID,
 
-    @Column(name = "telegram_user_id")
-    val telegramUserId: String,
-
-    @Column(name = "telegram_display_name")
-    var telegramDisplayName: String?,
+    @Column(name = "user_id")
+    val userId: UUID,
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
@@ -39,7 +36,7 @@ class CoachRequestEntity(
 
 interface CoachRequestRepository : JpaRepository<CoachRequestEntity, UUID> {
 
-    fun findByTelegramUserId(telegramUserId: String): CoachRequestEntity?
+    fun findByUserId(userId: UUID): CoachRequestEntity?
 
     fun findByStatusOrderByCreatedAtAsc(status: CoachRequestStatus): List<CoachRequestEntity>
 }

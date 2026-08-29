@@ -1,10 +1,8 @@
 package app.trainer.backend.coachrequest
 
 import app.trainer.backend.admin.AdminService
-import app.trainer.backend.admin.CreateCoachRequest
-import app.trainer.backend.auth.external.ExternalAuthService
-import app.trainer.backend.auth.external.ExternalProvider
-import app.trainer.backend.auth.external.VerifiedIdentity
+import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
@@ -14,70 +12,58 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
-private const val NAMELESS_COACH = "Тренер"
-
 @Service
 class CoachRequestService(
     private val requestRepository: CoachRequestRepository,
+    private val coachRepository: CoachRepository,
+    private val userRepository: UserRepository,
     private val adminService: AdminService,
-    private val externalAuthService: ExternalAuthService,
     private val clock: Clock,
 ) {
 
     @Transactional
-    fun ask(telegramUserId: String, telegramDisplayName: String?): CoachRequestStatus {
-        val known = requestRepository.findByTelegramUserId(telegramUserId)
+    fun ask(userId: UUID): CoachRequestStatusResponse {
+        if (coachRepository.findByUserId(userId) != null) {
+            return CoachRequestStatusResponse(status = CoachRequestStatus.APPROVED)
+        }
+        val known = requestRepository.findByUserId(userId)
         if (known != null) {
-            if (known.status == CoachRequestStatus.APPROVED) return known.status
-            known.telegramDisplayName = telegramDisplayName
             known.status = CoachRequestStatus.PENDING
             known.decidedAt = null
-            return known.status
+            return CoachRequestStatusResponse(status = known.status)
         }
         requestRepository.save(
             CoachRequestEntity(
                 id = UUID.randomUUID(),
-                telegramUserId = telegramUserId,
-                telegramDisplayName = telegramDisplayName,
+                userId = userId,
                 status = CoachRequestStatus.PENDING,
                 createdAt = Instant.now(clock),
                 decidedAt = null,
             )
         )
-        return CoachRequestStatus.PENDING
+        return CoachRequestStatusResponse(status = CoachRequestStatus.PENDING)
     }
 
     @Transactional(readOnly = true)
     fun pending(): List<CoachRequestResponse> = requestRepository
         .findByStatusOrderByCreatedAtAsc(CoachRequestStatus.PENDING)
-        .map(::toResponse)
+        .mapNotNull { request ->
+            val user = userRepository.findByIdOrNull(request.userId) ?: return@mapNotNull null
+            CoachRequestResponse(
+                id = request.id,
+                userId = request.userId,
+                displayName = user.displayName,
+                createdAt = request.createdAt,
+            )
+        }
 
     @Transactional
     fun approve(requestId: UUID, zoneId: String): ApprovedCoachResponse {
         val request = requirePending(requestId)
-        val onboarded = adminService.onboardCoach(
-            CreateCoachRequest(
-                displayName = request.telegramDisplayName?.takeIf { it.isNotBlank() } ?: NAMELESS_COACH,
-                zoneId = zoneId,
-                phone = null,
-                email = null,
-            )
-        )
-        externalAuthService.linkVerified(
-            userId = onboarded.userId,
-            verified = VerifiedIdentity(
-                provider = ExternalProvider.TELEGRAM,
-                subject = request.telegramUserId,
-                displayName = request.telegramDisplayName,
-            ),
-        )
+        val coach = adminService.promoteToCoach(userId = request.userId, zoneId = zoneId)
         request.status = CoachRequestStatus.APPROVED
         request.decidedAt = Instant.now(clock)
-        return ApprovedCoachResponse(
-            coachId = onboarded.coachId,
-            userId = onboarded.userId,
-            telegramUserId = request.telegramUserId,
-        )
+        return ApprovedCoachResponse(coachId = coach.id, userId = request.userId)
     }
 
     @Transactional
@@ -95,11 +81,4 @@ class CoachRequestService(
         }
         return request
     }
-
-    private fun toResponse(request: CoachRequestEntity): CoachRequestResponse = CoachRequestResponse(
-        id = request.id,
-        telegramUserId = request.telegramUserId,
-        telegramDisplayName = request.telegramDisplayName,
-        createdAt = request.createdAt,
-    )
 }
