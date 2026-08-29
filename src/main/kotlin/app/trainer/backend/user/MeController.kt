@@ -3,9 +3,7 @@ package app.trainer.backend.user
 import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
-import app.trainer.backend.coachrequest.AskCoachAccessRequest
-import app.trainer.backend.coachrequest.CoachAccessStatusResponse
-import app.trainer.backend.coachrequest.CoachRequestService
+import app.trainer.backend.coach.CoachSignUpService
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
 import java.util.UUID
@@ -27,7 +25,11 @@ data class MeResponse(
     val coachId: UUID?,
     val zoneId: String?,
     val hasCoach: Boolean,
-    val isOwner: Boolean,
+)
+
+data class BecomeCoachRequest(
+    val displayName: String,
+    val zoneId: String,
 )
 
 data class UpdateContactRequest(
@@ -40,7 +42,7 @@ class MeController(
     private val userRepository: UserRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
-    private val coachRequestService: CoachRequestService,
+    private val coachSignUpService: CoachSignUpService,
 ) {
 
     @PatchMapping("/me/contact")
@@ -73,17 +75,17 @@ class MeController(
         }
     }
 
-    @GetMapping("/me/coach-request")
-    fun coachRequestStatus(@CurrentUserId userId: UUID): CoachAccessStatusResponse {
-        return coachRequestService.statusOf(userId)
-    }
-
-    @PostMapping("/me/coach-request")
-    fun askCoachAccess(
+    @PostMapping("/me/coach")
+    fun becomeCoach(
         @CurrentUserId userId: UUID,
-        @Valid @RequestBody request: AskCoachAccessRequest,
-    ): CoachAccessStatusResponse {
-        return coachRequestService.ask(userId = userId, request = request)
+        @Valid @RequestBody request: BecomeCoachRequest,
+    ): MeResponse {
+        coachSignUpService.signUp(
+            userId = userId,
+            displayName = request.displayName,
+            zoneId = request.zoneId,
+        )
+        return me(userId)
     }
 
     @GetMapping("/me")
@@ -102,7 +104,6 @@ class MeController(
             email = user.email,
             coachId = coach?.id,
             zoneId = coach?.zoneId,
-            isOwner = coach?.isOwner == true,
             hasCoach = coachClientRepository
                 .findByUserId(user.id)
                 .any { it.status == CoachClientStatus.ACTIVE },

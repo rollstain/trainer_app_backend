@@ -36,9 +36,6 @@ class CoachEntity(
     @Column(name = "check_in_reminders_enabled")
     var checkInRemindersEnabled: Boolean,
 
-    @Column(name = "is_owner")
-    var isOwner: Boolean,
-
     @Column(name = "created_at")
     val createdAt: Instant,
 )
