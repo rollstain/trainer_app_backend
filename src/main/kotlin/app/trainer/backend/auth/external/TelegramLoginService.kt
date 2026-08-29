@@ -38,7 +38,12 @@ class TelegramLoginService(
         val botName = properties.botUsername.takeIf { it.isNotBlank() }
             ?: throw ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "Вход через Telegram не настроен")
         val now = Instant.now(clock)
-        loginRepository.deleteByCreatedAtBefore(now.minus(FORGOTTEN_LOGIN_HOURS, ChronoUnit.HOURS))
+        loginRepository.deleteByTargetUserIdIsNullAndCreatedAtBefore(
+            now.minus(FORGOTTEN_LOGIN_HOURS, ChronoUnit.HOURS)
+        )
+        loginRepository.deleteByTargetUserIdIsNotNullAndCreatedAtBefore(
+            now.minus(CLAIM_TTL_MINUTES, ChronoUnit.MINUTES)
+        )
 
         val startCode = randomText(START_CODE_BYTES)
         val claimToken = randomText(CLAIM_TOKEN_BYTES)

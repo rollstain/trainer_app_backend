@@ -50,5 +50,7 @@ interface TelegramLoginRepository : JpaRepository<TelegramLoginEntity, UUID> {
 
     fun findByClaimTokenHash(claimTokenHash: String): TelegramLoginEntity?
 
-    fun deleteByCreatedAtBefore(moment: Instant)
+    fun deleteByTargetUserIdIsNullAndCreatedAtBefore(moment: Instant)
+
+    fun deleteByTargetUserIdIsNotNullAndCreatedAtBefore(moment: Instant)
 }
