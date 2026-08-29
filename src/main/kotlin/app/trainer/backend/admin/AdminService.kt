@@ -4,6 +4,8 @@ import app.trainer.backend.auth.AuthProperties
 import app.trainer.backend.auth.InviteCodeGenerator
 import app.trainer.backend.auth.InviteEntity
 import app.trainer.backend.auth.InviteRepository
+import app.trainer.backend.auth.external.TelegramLoginService
+import app.trainer.backend.auth.external.TelegramStartResponse
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.user.UserEntity
@@ -27,6 +29,7 @@ class AdminService(
     private val coachRepository: CoachRepository,
     private val inviteRepository: InviteRepository,
     private val inviteCodeGenerator: InviteCodeGenerator,
+    private val telegramLoginService: TelegramLoginService,
     private val properties: AuthProperties,
     private val clock: Clock,
 ) {
@@ -78,6 +81,13 @@ class AdminService(
             code = invite.code,
             expiresAt = invite.expiresAt,
         )
+    }
+
+    @Transactional
+    fun telegramClaimLink(coachId: UUID): TelegramStartResponse {
+        val coach = coachRepository.findByIdOrNull(coachId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
+        return telegramLoginService.startClaim(targetUserId = coach.userId)
     }
 
     private fun mintLoginCode(coach: CoachEntity, now: Instant): InviteEntity {

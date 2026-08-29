@@ -25,6 +25,12 @@ data class TelegramConfirmRequest(
     val telegramDisplayName: String?,
 )
 
+data class TelegramConfirmResponse(
+    val kind: TelegramConfirmKind,
+)
+
+enum class TelegramConfirmKind { LOGIN, LINK }
+
 data class TelegramStartResponse(
     val claimToken: String,
     val deepLink: String,

@@ -1,6 +1,9 @@
 package app.trainer.backend.auth.external
 
 import app.trainer.backend.auth.AuthTokensResponse
+import app.trainer.backend.coachrequest.AskCoachAccessRequest
+import app.trainer.backend.coachrequest.CoachRequestService
+import app.trainer.backend.coachrequest.CoachRequestStatusResponse
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
 import java.security.MessageDigest
@@ -12,7 +15,6 @@ import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
-import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 
@@ -24,31 +26,44 @@ class ExternalAuthController(
     private val externalAuthService: ExternalAuthService,
     private val telegramLoginService: TelegramLoginService,
     private val telegramProperties: TelegramProperties,
+    private val coachRequestService: CoachRequestService,
 ) {
-
-    @GetMapping("/auth/providers")
-    fun availableProviders(): List<ExternalProvider> = buildList {
-        if (telegramProperties.botUsername.isNotBlank()) add(ExternalProvider.TELEGRAM)
-    }
 
     @PostMapping("/auth/telegram/start")
     fun startTelegramLogin(): TelegramStartResponse = telegramLoginService.start()
 
     @PostMapping("/auth/telegram/confirm")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
     fun confirmTelegramLogin(
         @RequestHeader(name = BOT_SECRET_HEADER, required = false) secret: String?,
         @Valid @RequestBody request: TelegramConfirmRequest,
-    ) {
+    ): TelegramConfirmResponse {
         authorizeBot(secret)
         val confirmed = telegramLoginService.confirm(
             startCode = request.startCode,
             telegramUserId = request.telegramUserId,
             telegramDisplayName = request.telegramDisplayName,
-        )
-        if (!confirmed) {
-            throw ResponseStatusException(HttpStatus.GONE, "Ссылка входа уже недействительна")
+        ) ?: throw ResponseStatusException(HttpStatus.GONE, "Ссылка входа уже недействительна")
+
+        val targetUserId = confirmed.targetUserId
+        val identity = confirmed.identity
+        if (targetUserId == null || identity == null) {
+            return TelegramConfirmResponse(kind = TelegramConfirmKind.LOGIN)
         }
+        externalAuthService.linkVerified(userId = targetUserId, verified = identity)
+        return TelegramConfirmResponse(kind = TelegramConfirmKind.LINK)
+    }
+
+    @PostMapping("/auth/telegram/coach-request")
+    fun askCoachAccess(
+        @RequestHeader(name = BOT_SECRET_HEADER, required = false) secret: String?,
+        @Valid @RequestBody request: AskCoachAccessRequest,
+    ): CoachRequestStatusResponse {
+        authorizeBot(secret)
+        val status = coachRequestService.ask(
+            telegramUserId = request.telegramUserId,
+            telegramDisplayName = request.telegramDisplayName,
+        )
+        return CoachRequestStatusResponse(status = status)
     }
 
     @PostMapping("/auth/external")

@@ -6,6 +6,8 @@ import java.time.ZoneOffset
 import java.time.temporal.ChronoUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -21,6 +23,7 @@ private const val BOT_USERNAME = "trainer_login_bot"
 private const val TELEGRAM_USER_ID = "44417"
 private const val TELEGRAM_NAME = "Дмитрий"
 private const val LOGIN_TTL_MINUTES = 10L
+private val COACH_USER_ID: java.util.UUID = java.util.UUID.fromString("7d1f0f2e-0000-0000-0000-000000000001")
 
 @Suppress("UNCHECKED_CAST")
 private fun <T> anyNonNull(): T = ArgumentMatchers.any<T>() ?: (null as T)
@@ -81,7 +84,7 @@ class TelegramLoginServiceTest {
         givenStored(login)
         `when`(loginRepository.findByStartCode(login.startCode)).thenReturn(login)
 
-        assertTrue(
+        assertNotNull(
             service.confirm(
                 startCode = login.startCode,
                 telegramUserId = TELEGRAM_USER_ID,
@@ -108,7 +111,7 @@ class TelegramLoginServiceTest {
 
         val late = serviceAt(NOW.plus(LOGIN_TTL_MINUTES + 1, ChronoUnit.MINUTES))
 
-        assertFalse(
+        assertNull(
             late.confirm(
                 startCode = login.startCode,
                 telegramUserId = TELEGRAM_USER_ID,
@@ -131,5 +134,31 @@ class TelegramLoginServiceTest {
 
     private fun givenStored(login: TelegramLoginEntity) {
         `when`(loginRepository.findByClaimTokenHash(login.claimTokenHash)).thenReturn(login)
+    }
+
+    @Test
+    fun `a claim link binds telegram to the coach instead of opening a session`() {
+        val service = serviceAt(NOW)
+        service.startClaim(targetUserId = COACH_USER_ID)
+        val login = saved.single()
+        `when`(loginRepository.findByStartCode(login.startCode)).thenReturn(login)
+
+        val confirmed = service.confirm(
+            startCode = login.startCode,
+            telegramUserId = TELEGRAM_USER_ID,
+            telegramDisplayName = TELEGRAM_NAME,
+        )
+
+        assertNotNull(confirmed)
+        assertEquals(COACH_USER_ID, confirmed.targetUserId)
+        assertEquals(TELEGRAM_USER_ID, confirmed.identity?.subject)
+        assertNull(
+            service.confirm(
+                startCode = login.startCode,
+                telegramUserId = TELEGRAM_USER_ID,
+                telegramDisplayName = TELEGRAM_NAME,
+            ),
+            "ссылку привязки нельзя использовать дважды",
+        )
     }
 }

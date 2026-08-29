@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import socket
 import sys
 import time
 import urllib.error
@@ -14,9 +15,21 @@ RETRY_DELAY_SECONDS = 5
 START_COMMAND = "/start"
 
 REPLY_CONFIRMED = "Готово. Вернитесь в приложение — вход завершится сам."
+REPLY_LINKED = "Готово. Теперь входите в приложение кнопкой «Войти через Telegram»."
 REPLY_LINK_DEAD = "Ссылка устарела. Начните вход в приложении заново."
 REPLY_FAILED = "Не получилось подтвердить вход. Попробуйте ещё раз через минуту."
 REPLY_HELP = "Этот бот подтверждает вход в приложение. Нажмите «Войти через Telegram» в приложении."
+REPLY_WHO = "Кто вы?"
+REPLY_CLIENT = (
+    "Откройте приложение и нажмите «Войти через Telegram». "
+    "Код от тренера введёте уже внутри."
+)
+REPLY_COACH_ASKED = "Заявка отправлена. Владелец её рассмотрит и откроет вам доступ тренера."
+REPLY_COACH_APPROVED = "Доступ тренера уже открыт. Входите в приложении кнопкой «Войти через Telegram»."
+BUTTON_COACH = "Я тренер"
+BUTTON_CLIENT = "Я подопечный"
+CALLBACK_COACH = "coach"
+CALLBACK_CLIENT = "client"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,6 +45,7 @@ class Settings:
         self.bot_token = require_env("TELEGRAM_BOT_TOKEN")
         self.bot_secret = require_env("TELEGRAM_BOT_SECRET")
         self.api_url = require_env("TRAINER_API_URL").rstrip("/")
+        self.owner_chat_id = os.environ.get("TELEGRAM_OWNER_CHAT_ID", "").strip()
 
 
 def require_env(name):
@@ -73,24 +87,78 @@ class TelegramBot:
             raise RuntimeError(f"Telegram отказал: {answer.get('description')}")
         return answer.get("result", [])
 
-    def reply(self, chat_id, text):
+    def reply(self, chat_id, text, keyboard=None):
+        payload = {"chat_id": chat_id, "text": text}
+        if keyboard is not None:
+            payload["reply_markup"] = {"inline_keyboard": keyboard}
         post_json(
             url=f"{TELEGRAM_API}/bot{self.settings.bot_token}/sendMessage",
-            payload={"chat_id": chat_id, "text": text},
+            payload=payload,
         )
+
+    def answer_callback(self, callback_id):
+        post_json(
+            url=f"{TELEGRAM_API}/bot{self.settings.bot_token}/answerCallbackQuery",
+            payload={"callback_query_id": callback_id},
+        )
+
+    def tell_owner(self, text):
+        owner = self.settings.owner_chat_id
+        if not owner:
+            return
+        self.reply(owner, text)
 
     def accept(self, update):
         self.offset = update["update_id"] + 1
+        callback = update.get("callback_query")
+        if callback:
+            self.accept_choice(callback)
+            return
         message = update.get("message")
         if not message:
             return
         chat_id = message["chat"]["id"]
-        start_code = start_code_of(message.get("text", ""))
-        if start_code is None:
-            self.reply(chat_id, REPLY_HELP)
+        text = message.get("text", "")
+        start_code = start_code_of(text)
+        if start_code is not None:
+            self.reply(chat_id, self.confirm(start_code=start_code, sender=message.get("from", {})))
             return
-        sender = message.get("from", {})
-        self.reply(chat_id, self.confirm(start_code=start_code, sender=sender))
+        if text.strip() == START_COMMAND:
+            self.reply(chat_id, REPLY_WHO, keyboard=who_keyboard())
+            return
+        self.reply(chat_id, REPLY_HELP)
+
+    def accept_choice(self, callback):
+        self.answer_callback(callback["id"])
+        chat_id = callback["message"]["chat"]["id"]
+        sender = callback.get("from", {})
+        if callback.get("data") == CALLBACK_COACH:
+            self.reply(chat_id, self.ask_coach_access(sender))
+            return
+        self.reply(chat_id, REPLY_CLIENT)
+
+    def ask_coach_access(self, sender):
+        payload = {
+            "telegramUserId": str(sender.get("id")),
+            "telegramDisplayName": display_name_of(sender),
+        }
+        try:
+            _, answer = post_json(
+                url=f"{self.settings.api_url}/auth/telegram/coach-request",
+                payload=payload,
+                headers={"X-Telegram-Bot-Secret": self.settings.bot_secret},
+            )
+        except (urllib.error.HTTPError, urllib.error.URLError) as failure:
+            logger.error("заявка не ушла: %s", failure)
+            return REPLY_FAILED
+        if (answer or {}).get("status") == "APPROVED":
+            return REPLY_COACH_APPROVED
+        logger.info("заявка тренера от %s", payload["telegramUserId"])
+        self.tell_owner(
+            f"Заявка на доступ тренера: {payload['telegramDisplayName'] or 'без имени'} "
+            f"(telegram id {payload['telegramUserId']})"
+        )
+        return REPLY_COACH_ASKED
 
     def confirm(self, start_code, sender):
         payload = {
@@ -99,19 +167,33 @@ class TelegramBot:
             "telegramDisplayName": display_name_of(sender),
         }
         try:
-            status, _ = post_json(
+            status, answer = post_json(
                 url=f"{self.settings.api_url}/auth/telegram/confirm",
                 payload=payload,
                 headers={"X-Telegram-Bot-Secret": self.settings.bot_secret},
             )
-            logger.info("вход подтверждён, статус %s", status)
-            return REPLY_CONFIRMED
+            kind = (answer or {}).get("kind")
+            logger.info("подтверждено, статус %s, вид %s", status, kind)
+            return REPLY_LINKED if kind == "LINK" else REPLY_CONFIRMED
         except urllib.error.HTTPError as failure:
             logger.warning("сервер отказал: %s", failure.code)
             return REPLY_LINK_DEAD if failure.code == 410 else REPLY_FAILED
         except urllib.error.URLError as failure:
             logger.error("сервер недоступен: %s", failure.reason)
             return REPLY_FAILED
+
+
+def who_keyboard():
+    return [
+        [{"text": BUTTON_COACH, "callback_data": CALLBACK_COACH}],
+        [{"text": BUTTON_CLIENT, "callback_data": CALLBACK_CLIENT}],
+    ]
+
+
+def is_poll_timeout(failure):
+    if isinstance(failure, socket.timeout):
+        return True
+    return isinstance(failure, urllib.error.URLError) and isinstance(failure.reason, socket.timeout)
 
 
 def start_code_of(text):
@@ -134,6 +216,8 @@ def main():
             for update in bot.poll():
                 bot.accept(update)
         except Exception as failure:
+            if is_poll_timeout(failure):
+                continue
             logger.error("цикл опроса упал: %s", failure)
             time.sleep(RETRY_DELAY_SECONDS)
 

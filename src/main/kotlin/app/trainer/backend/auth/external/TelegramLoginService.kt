@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException
 private const val START_CODE_BYTES = 12
 private const val CLAIM_TOKEN_BYTES = 32
 private const val LOGIN_TTL_MINUTES = 10L
+private const val CLAIM_TTL_MINUTES = 1440L
 private const val FORGOTTEN_LOGIN_HOURS = 1L
 
 @Service
@@ -28,7 +29,12 @@ class TelegramLoginService(
     private val encoder: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
 
     @Transactional
-    fun start(): TelegramStartResponse {
+    fun startClaim(targetUserId: UUID): TelegramStartResponse = start(targetUserId = targetUserId)
+
+    @Transactional
+    fun start(): TelegramStartResponse = start(targetUserId = null)
+
+    private fun start(targetUserId: UUID?): TelegramStartResponse {
         val botName = properties.botUsername.takeIf { it.isNotBlank() }
             ?: throw ResponseStatusException(HttpStatus.NOT_IMPLEMENTED, "Вход через Telegram не настроен")
         val now = Instant.now(clock)
@@ -43,6 +49,7 @@ class TelegramLoginService(
                 claimTokenHash = hashOf(claimToken),
                 telegramUserId = null,
                 telegramDisplayName = null,
+                targetUserId = targetUserId,
                 createdAt = now,
                 confirmedAt = null,
                 consumedAt = null,
@@ -55,13 +62,26 @@ class TelegramLoginService(
     }
 
     @Transactional
-    fun confirm(startCode: String, telegramUserId: String, telegramDisplayName: String?): Boolean {
-        val login = loginRepository.findByStartCode(startCode) ?: return false
-        if (login.consumedAt != null || isExpired(login)) return false
+    fun confirm(
+        startCode: String,
+        telegramUserId: String,
+        telegramDisplayName: String?,
+    ): ConfirmedTelegramLogin? {
+        val login = loginRepository.findByStartCode(startCode) ?: return null
+        if (login.consumedAt != null || isExpired(login)) return null
         login.telegramUserId = telegramUserId
         login.telegramDisplayName = telegramDisplayName
         login.confirmedAt = Instant.now(clock)
-        return true
+        val targetUserId = login.targetUserId ?: return ConfirmedTelegramLogin(targetUserId = null, identity = null)
+        login.consumedAt = login.confirmedAt
+        return ConfirmedTelegramLogin(
+            targetUserId = targetUserId,
+            identity = VerifiedIdentity(
+                provider = ExternalProvider.TELEGRAM,
+                subject = telegramUserId,
+                displayName = telegramDisplayName?.takeIf { it.isNotBlank() },
+            ),
+        )
     }
 
     @Transactional
@@ -83,8 +103,10 @@ class TelegramLoginService(
         )
     }
 
-    private fun isExpired(login: TelegramLoginEntity): Boolean =
-        login.createdAt.plus(LOGIN_TTL_MINUTES, ChronoUnit.MINUTES).isBefore(Instant.now(clock))
+    private fun isExpired(login: TelegramLoginEntity): Boolean {
+        val minutes = if (login.targetUserId == null) LOGIN_TTL_MINUTES else CLAIM_TTL_MINUTES
+        return login.createdAt.plus(minutes, ChronoUnit.MINUTES).isBefore(Instant.now(clock))
+    }
 
     private fun randomText(bytes: Int): String {
         val buffer = ByteArray(bytes)
