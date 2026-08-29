@@ -31,6 +31,7 @@ data class MeResponse(
     val coachId: UUID?,
     val zoneId: String?,
     val hasCoach: Boolean,
+    val isOwner: Boolean,
 )
 
 data class BecomeCoachRequest(
@@ -133,6 +134,7 @@ class MeController(
             hasCoach = coachClientRepository
                 .findByUserId(user.id)
                 .any { it.status == CoachClientStatus.ACTIVE },
+            isOwner = user.isOwner,
         )
     }
 }

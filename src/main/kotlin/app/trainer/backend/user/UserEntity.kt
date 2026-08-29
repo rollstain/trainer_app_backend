@@ -27,6 +27,9 @@ class UserEntity(
     @Column(name = "login")
     var login: String?,
 
+    @Column(name = "is_owner")
+    var isOwner: Boolean,
+
     @Column(name = "created_at")
     val createdAt: Instant,
 )

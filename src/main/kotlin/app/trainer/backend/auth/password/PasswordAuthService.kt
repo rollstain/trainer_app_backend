@@ -46,6 +46,7 @@ class PasswordAuthService(
                 phone = null,
                 email = email,
                 login = login,
+                isOwner = false,
                 createdAt = now,
             )
         )

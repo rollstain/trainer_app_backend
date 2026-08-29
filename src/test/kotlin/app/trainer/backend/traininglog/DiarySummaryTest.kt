@@ -174,6 +174,7 @@ class DiarySummaryTest {
         phone = null,
         email = null,
         login = null,
+        isOwner = false,
         createdAt = NOW,
     )
 

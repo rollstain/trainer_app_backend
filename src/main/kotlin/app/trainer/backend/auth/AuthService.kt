@@ -132,6 +132,7 @@ class AuthService(
                 phone = null,
                 email = null,
                 login = null,
+                isOwner = false,
                 createdAt = now,
             )
         )

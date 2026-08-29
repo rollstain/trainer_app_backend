@@ -51,6 +51,7 @@ class AdminService(
                 phone = phone,
                 email = email,
                 login = null,
+                isOwner = false,
                 createdAt = now,
             )
         )

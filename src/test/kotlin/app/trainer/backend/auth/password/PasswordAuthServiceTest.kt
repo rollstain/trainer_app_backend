@@ -69,6 +69,7 @@ internal fun userEntity(email: String? = EMAIL) = UserEntity(
     phone = null,
     email = email,
     login = LOGIN,
+    isOwner = false,
     createdAt = NOW,
 )
 
