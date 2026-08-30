@@ -56,6 +56,8 @@ trainer:
     password-lock-max-minutes: 30
     password-reset-ttl-minutes: 60
     password-reset-resend-seconds: 120
+    email-confirm-ttl-hours: 72
+    email-confirm-resend-seconds: 120
     jwt-secret: ${JWT_SECRET:}
     admin-token: ${TRAINER_ADMIN_TOKEN:}
     external:
@@ -69,6 +71,7 @@ trainer:
     from: ${MAIL_FROM:}
     from-name: ${MAIL_FROM_NAME:Тренер}
     reset-link-prefix: ${MAIL_RESET_LINK_PREFIX:https://api.lyashukfit.ru/r/}
+    confirm-link-prefix: ${MAIL_CONFIRM_LINK_PREFIX:https://api.lyashukfit.ru/c/}
   legal:
     operator-name: ${LEGAL_OPERATOR_NAME:}
     operator-contact: ${LEGAL_OPERATOR_CONTACT:}

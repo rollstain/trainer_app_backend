@@ -12,12 +12,14 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val ALTERNATIVE_PARTS = true
 private const val RESET_SUBJECT = "Новый пароль в приложении тренера"
+private const val CONFIRM_SUBJECT = "Подтвердите почту в приложении тренера"
 
 @ConfigurationProperties(prefix = "trainer.mail")
 data class MailProperties(
     val from: String,
     val fromName: String,
     val resetLinkPrefix: String,
+    val confirmLinkPrefix: String,
 )
 
 @Service
@@ -31,17 +33,27 @@ class MailService(
         get() = smtpHost.isNotBlank() && properties.from.isNotBlank()
 
     fun sendPasswordReset(recipient: String, link: String) {
+        send(recipient = recipient, subject = RESET_SUBJECT, plain = resetPlainText(link), html = resetHtml(link))
+    }
+
+    fun sendEmailConfirmation(recipient: String, link: String) {
+        send(recipient = recipient, subject = CONFIRM_SUBJECT, plain = confirmPlainText(link), html = confirmHtml(link))
+    }
+
+    fun resetLinkOf(token: String): String = properties.resetLinkPrefix + token
+
+    fun confirmLinkOf(token: String): String = properties.confirmLinkPrefix + token
+
+    private fun send(recipient: String, subject: String, plain: String, html: String) {
         val sender = configuredSender()
         val message = sender.createMimeMessage()
         val helper = MimeMessageHelper(message, ALTERNATIVE_PARTS, Charsets.UTF_8.name())
         helper.setFrom(InternetAddress(properties.from, properties.fromName, Charsets.UTF_8.name()))
         helper.setTo(recipient)
-        helper.setSubject(RESET_SUBJECT)
-        helper.setText(resetPlainText(link), resetHtml(link))
+        helper.setSubject(subject)
+        helper.setText(plain, html)
         sender.send(message)
     }
-
-    fun resetLinkOf(token: String): String = properties.resetLinkPrefix + token
 
     private fun configuredSender(): JavaMailSender {
         if (!isConfigured) {
@@ -61,6 +73,34 @@ $link
 
 Ссылка работает час и только один раз. Если пароль менять вы не просили, ничего делать не нужно:
 прежний остаётся в силе.
+""".trimIndent()
+
+private fun confirmPlainText(link: String): String = """
+Здравствуйте!
+
+Этот адрес указали в приложении тренера. Откройте ссылку, чтобы подтвердить, что почта ваша:
+
+$link
+
+Ссылка работает три дня и только один раз. Если это были не вы, ничего делать не нужно:
+неподтверждённый адрес сможет забрать его настоящий владелец.
+""".trimIndent()
+
+private fun confirmHtml(link: String): String = """
+<!doctype html>
+<html lang="ru">
+<body style="margin:0;padding:24px;background:#f5f5f4;font-family:-apple-system,system-ui,sans-serif;color:#1c1917;">
+<div style="max-width:420px;margin:0 auto;">
+<p style="font-size:16px;line-height:1.5;">Этот адрес указали в приложении тренера. Нажмите кнопку,
+чтобы подтвердить, что почта ваша.</p>
+<p style="margin:24px 0;">
+<a href="$link" style="display:block;text-align:center;text-decoration:none;background:#2f4fea;color:#fff;border-radius:12px;padding:16px;font-weight:600;">Подтвердить почту</a>
+</p>
+<p style="font-size:14px;line-height:1.5;color:#57534e;">Ссылка работает три дня и только один раз.
+Если это были не вы, ничего делать не нужно: неподтверждённый адрес сможет забрать его настоящий владелец.</p>
+</div>
+</body>
+</html>
 """.trimIndent()
 
 private fun resetHtml(link: String): String = """

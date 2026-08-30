@@ -14,6 +14,8 @@ data class AuthProperties(
     val passwordLockMaxMinutes: Long,
     val passwordResetTtlMinutes: Long,
     val passwordResetResendSeconds: Long,
+    val emailConfirmTtlHours: Long,
+    val emailConfirmResendSeconds: Long,
     val jwtSecret: String,
     val adminToken: String,
 )

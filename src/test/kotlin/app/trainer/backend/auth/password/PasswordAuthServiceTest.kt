@@ -4,6 +4,7 @@ import app.trainer.backend.auth.AuthProperties
 import app.trainer.backend.auth.AuthTokensResponse
 import app.trainer.backend.auth.SessionOpener
 import app.trainer.backend.auth.SessionService
+import app.trainer.backend.auth.email.EmailConfirmationService
 import app.trainer.backend.config.FieldConflictException
 import app.trainer.backend.config.TooManyAttemptsException
 import app.trainer.backend.user.UserEntity
@@ -40,6 +41,7 @@ internal const val LOCK_MINUTES = 5L
 internal const val LOCK_MAX_MINUTES = 30L
 internal const val RESET_TTL_MINUTES = 60L
 internal const val RESEND_SECONDS = 120L
+internal const val CONFIRM_TTL_HOURS = 72L
 internal const val SECONDS_IN_MINUTE = 60L
 internal const val CHEAP_BCRYPT_STRENGTH = 4
 
@@ -59,15 +61,18 @@ internal fun authProperties() = AuthProperties(
     passwordLockMaxMinutes = LOCK_MAX_MINUTES,
     passwordResetTtlMinutes = RESET_TTL_MINUTES,
     passwordResetResendSeconds = RESEND_SECONDS,
+    emailConfirmTtlHours = CONFIRM_TTL_HOURS,
+    emailConfirmResendSeconds = RESEND_SECONDS,
     jwtSecret = "0123456789012345678901234567890123456789",
     adminToken = "admin-token",
 )
 
-internal fun userEntity(email: String? = EMAIL) = UserEntity(
+internal fun userEntity(email: String? = EMAIL, emailConfirmedAt: Instant? = NOW) = UserEntity(
     id = USER_ID,
     displayName = "Иван",
     phone = null,
     email = email,
+    emailConfirmedAt = emailConfirmedAt,
     login = LOGIN,
     isOwner = false,
     createdAt = NOW,
@@ -91,11 +96,14 @@ class PasswordAuthServiceTest {
         passwordEncoder = passwordEncoder,
     )
 
+    private val emailConfirmationService = mock(EmailConfirmationService::class.java)
+
     private val service = PasswordAuthService(
         userRepository = userRepository,
         passwordStore = passwordStore,
         sessionService = sessionService,
         sessionOpener = sessionOpener,
+        emailConfirmationService = emailConfirmationService,
         properties = authProperties(),
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
@@ -103,6 +111,7 @@ class PasswordAuthServiceTest {
     @Test
     fun `sign-up stores a lowercase email and opens a session`() {
         `when`(userRepository.save(anyNonNull<UserEntity>())).thenAnswer { it.arguments[0] as UserEntity }
+        `when`(emailConfirmationService.freeUnconfirmedHolder(email = EMAIL, ownerId = null)).thenReturn(true)
         givenSessionOpens()
 
         service.signUp(
@@ -123,8 +132,29 @@ class PasswordAuthServiceTest {
     }
 
     @Test
+    fun `sign-up leaves the address unconfirmed and asks to confirm it`() {
+        `when`(userRepository.save(anyNonNull<UserEntity>())).thenAnswer { it.arguments[0] as UserEntity }
+        `when`(emailConfirmationService.freeUnconfirmedHolder(email = EMAIL, ownerId = null)).thenReturn(true)
+        givenSessionOpens()
+
+        service.signUp(
+            PasswordSignUpRequest(
+                displayName = "Иван",
+                email = EMAIL,
+                login = null,
+                password = PASSWORD,
+                deviceInfo = DEVICE,
+            )
+        )
+
+        val saved = savedUser()
+        assertNull(saved.emailConfirmedAt)
+        verify(emailConfirmationService).beginQuietly(user = saved, email = EMAIL)
+    }
+
+    @Test
     fun `sign-up rejects an email already taken in another letter case`() {
-        `when`(userRepository.findByEmail(EMAIL)).thenReturn(userEntity())
+        `when`(emailConfirmationService.freeUnconfirmedHolder(email = EMAIL, ownerId = null)).thenReturn(false)
 
         val rejected = assertFailsWith<FieldConflictException> {
             service.signUp(
@@ -144,6 +174,8 @@ class PasswordAuthServiceTest {
 
     @Test
     fun `sign-up rejects a password shorter than the minimum`() {
+        `when`(emailConfirmationService.freeUnconfirmedHolder(email = EMAIL, ownerId = null)).thenReturn(true)
+
         val rejected = assertFailsWith<ResponseStatusException> {
             service.signUp(
                 PasswordSignUpRequest(
@@ -269,9 +301,10 @@ class PasswordAuthServiceTest {
 
     @Test
     fun `the first password adopts the email it was given`() {
-        val user = userEntity(email = null)
+        val user = userEntity(email = null, emailConfirmedAt = null)
         `when`(userRepository.findById(USER_ID)).thenReturn(Optional.of(user))
         `when`(credentialRepository.findById(USER_ID)).thenReturn(Optional.empty())
+        `when`(emailConfirmationService.freeUnconfirmedHolder(email = EMAIL, ownerId = USER_ID)).thenReturn(true)
 
         service.setPassword(
             userId = USER_ID,
@@ -285,6 +318,8 @@ class PasswordAuthServiceTest {
         )
 
         assertEquals(EMAIL, user.email)
+        assertNull(user.emailConfirmedAt)
+        verify(emailConfirmationService).beginQuietly(user = user, email = EMAIL)
         assertTrue(passwordEncoder.matches(NEW_PASSWORD, savedCredential().passwordHash))
     }
 

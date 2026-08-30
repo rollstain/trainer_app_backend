@@ -67,10 +67,11 @@ class SecurityConfig(private val properties: AuthProperties) {
                     "/auth/password/forgot",
                     "/auth/password/reset/telegram",
                     "/auth/password/reset/email",
+                    "/auth/email/confirm",
                 ).permitAll()
                 it.requestMatchers("/admin/**").permitAll()
                 it.requestMatchers("/ws/**").permitAll()
-                it.requestMatchers("/i/*", "/r/*", "/legal/*", "/.well-known/**").permitAll()
+                it.requestMatchers("/i/*", "/r/*", "/c/*", "/legal/*", "/.well-known/**").permitAll()
                 it.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 it.anyRequest().authenticated()
             }

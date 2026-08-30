@@ -29,6 +29,7 @@ private const val LOCK_MINUTES = 5L
 private const val LOCK_MAX_MINUTES = 30L
 private const val RESET_TTL_MINUTES = 60L
 private const val RESEND_SECONDS = 120L
+private const val CONFIRM_TTL_HOURS = 72L
 private const val INVITE_TTL_HOURS = 72L
 private const val FIRST_TOKEN = "first-refresh-token"
 private const val DEVICE = "Pixel 8"
@@ -52,6 +53,8 @@ class SessionRotationTest {
         passwordLockMaxMinutes = LOCK_MAX_MINUTES,
         passwordResetTtlMinutes = RESET_TTL_MINUTES,
         passwordResetResendSeconds = RESEND_SECONDS,
+        emailConfirmTtlHours = CONFIRM_TTL_HOURS,
+        emailConfirmResendSeconds = RESEND_SECONDS,
         jwtSecret = "secret",
         adminToken = "admin-token",
     )

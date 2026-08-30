@@ -4,6 +4,7 @@ import app.trainer.backend.auth.AuthProperties
 import app.trainer.backend.auth.AuthTokensResponse
 import app.trainer.backend.auth.SessionOpener
 import app.trainer.backend.auth.SessionService
+import app.trainer.backend.auth.email.EmailConfirmationService
 import app.trainer.backend.config.FieldConflictException
 import app.trainer.backend.config.TooManyAttemptsException
 import app.trainer.backend.user.UserEntity
@@ -28,6 +29,7 @@ class PasswordAuthService(
     private val passwordStore: PasswordStore,
     private val sessionService: SessionService,
     private val sessionOpener: SessionOpener,
+    private val emailConfirmationService: EmailConfirmationService,
     private val properties: AuthProperties,
     private val clock: Clock,
 ) {
@@ -51,6 +53,7 @@ class PasswordAuthService(
             )
         )
         passwordStore.save(userId = user.id, password = request.password, now = now)
+        emailConfirmationService.beginQuietly(user = user, email = email)
         return sessionOpener.openSession(userId = user.id, deviceInfo = request.deviceInfo)
     }
 
@@ -95,7 +98,12 @@ class PasswordAuthService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите почту — ею вы будете входить")
         }
         if (requestedEmail != null) {
-            user.email = requireFreeEmail(raw = requestedEmail, ownerId = user.id)
+            val email = requireFreeEmail(raw = requestedEmail, ownerId = user.id)
+            if (email != user.email) {
+                user.email = email
+                user.emailConfirmedAt = null
+                emailConfirmationService.beginQuietly(user = user, email = email)
+            }
         }
         request.login?.takeIf { it.isNotBlank() }?.let { user.login = requireFreeLogin(raw = it, ownerId = user.id) }
     }
@@ -143,8 +151,7 @@ class PasswordAuthService(
     private fun requireFreeEmail(raw: String, ownerId: UUID?): String {
         val email = normalizedEmailOrNull(raw)
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Проверьте адрес почты")
-        val taken = userRepository.findByEmail(email)
-        if (taken != null && taken.id != ownerId) {
+        if (!emailConfirmationService.freeUnconfirmedHolder(email = email, ownerId = ownerId)) {
             throw FieldConflictException(field = EMAIL_FIELD, explanation = "Эта почта уже занята")
         }
         return email

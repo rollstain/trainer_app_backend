@@ -24,6 +24,9 @@ class UserEntity(
     @Column(name = "email")
     var email: String?,
 
+    @Column(name = "email_confirmed_at")
+    var emailConfirmedAt: Instant? = null,
+
     @Column(name = "login")
     var login: String?,
 

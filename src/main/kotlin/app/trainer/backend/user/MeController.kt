@@ -1,5 +1,6 @@
 package app.trainer.backend.user
 
+import app.trainer.backend.auth.email.EmailConfirmationService
 import app.trainer.backend.auth.password.PasswordStore
 import app.trainer.backend.auth.password.normalizedEmailOrNull
 import app.trainer.backend.coach.CoachClientRepository
@@ -25,6 +26,7 @@ data class MeResponse(
     val displayName: String,
     val phone: String?,
     val email: String?,
+    val emailConfirmed: Boolean,
     val login: String?,
     val hasPassword: Boolean,
     val passwordUpdatedAt: Instant?,
@@ -52,6 +54,7 @@ class MeController(
     private val coachClientRepository: CoachClientRepository,
     private val passwordStore: PasswordStore,
     private val coachSignUpService: CoachSignUpService,
+    private val emailConfirmationService: EmailConfirmationService,
 ) {
 
     @PatchMapping("/me/contact")
@@ -70,12 +73,17 @@ class MeController(
         if (phone == null && email == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите телефон или почту")
         }
-        if (email != null && email != user.email) {
+        val emailChanged = email != null && email != user.email
+        if (emailChanged) {
             requireCurrentPassword(userId = userId, provided = request.currentPassword)
         }
         requireContactIsFree(userId = userId, phone = phone, email = email)
         if (phone != null) user.phone = phone
-        if (email != null) user.email = email
+        if (email != null && emailChanged) {
+            user.email = email
+            user.emailConfirmedAt = null
+            emailConfirmationService.beginQuietly(user = user, email = email)
+        }
         return toResponse(user)
     }
 
@@ -92,8 +100,9 @@ class MeController(
         if (takenByPhone != null && takenByPhone.id != userId) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Этот телефон уже занят")
         }
-        val takenByEmail = email?.let(userRepository::findByEmail)
-        if (takenByEmail != null && takenByEmail.id != userId) {
+        val emailFreed = email == null ||
+            emailConfirmationService.freeUnconfirmedHolder(email = email, ownerId = userId)
+        if (!emailFreed) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Эта почта уже занята")
         }
     }
@@ -126,6 +135,7 @@ class MeController(
             displayName = user.displayName,
             phone = user.phone,
             email = user.email,
+            emailConfirmed = user.emailConfirmedAt != null,
             login = user.login,
             hasPassword = credential != null,
             passwordUpdatedAt = credential?.updatedAt,
