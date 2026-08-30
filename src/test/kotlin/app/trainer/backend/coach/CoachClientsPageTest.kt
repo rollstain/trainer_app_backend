@@ -33,6 +33,7 @@ class CoachClientsPageTest {
     private val coachClientRepository = mock(CoachClientRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
     private val clientNoteRepository = mock(ClientNoteRepository::class.java)
+    private val workingHourRepository = mock(CoachWorkingHourRepository::class.java)
     private val scheduleService = mock(ScheduleService::class.java)
 
     private val service = CoachService(
@@ -40,6 +41,7 @@ class CoachClientsPageTest {
         coachClientRepository = coachClientRepository,
         userRepository = userRepository,
         clientNoteRepository = clientNoteRepository,
+        workingHourRepository = workingHourRepository,
         scheduleService = scheduleService,
     )
 

@@ -2,7 +2,9 @@ package app.trainer.backend.coach
 
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
+import java.time.DayOfWeek
 import java.time.Instant
+import java.time.LocalTime
 import java.util.UUID
 
 private const val MIN_CANCELLATION_WINDOW_HOURS = 0L
@@ -24,6 +26,13 @@ data class CoachSummaryResponse(
     val displayName: String,
     val zoneId: String,
     val cancellationWindowHours: Int,
+    val workingHours: List<WorkingDayDto>,
+)
+
+data class WorkingDayDto(
+    val dayOfWeek: DayOfWeek,
+    val opensAt: LocalTime,
+    val closesAt: LocalTime,
 )
 
 data class UpdateCoachPolicyRequest(
@@ -36,6 +45,7 @@ data class UpdateCoachPolicyRequest(
     val sessionRemindersEnabled: Boolean?,
     val diaryRemindersEnabled: Boolean?,
     val checkInRemindersEnabled: Boolean?,
+    val workingHours: List<WorkingDayDto>?,
 )
 
 data class CoachPolicyResponse(
@@ -44,6 +54,7 @@ data class CoachPolicyResponse(
     val sessionRemindersEnabled: Boolean,
     val diaryRemindersEnabled: Boolean,
     val checkInRemindersEnabled: Boolean,
+    val workingHours: List<WorkingDayDto>,
 )
 
 data class MissedSessionsResponse(

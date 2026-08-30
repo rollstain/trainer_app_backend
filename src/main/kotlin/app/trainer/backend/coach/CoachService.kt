@@ -10,6 +10,7 @@ import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.schedule.ScheduleService
 import app.trainer.backend.user.UserRepository
+import java.time.DayOfWeek
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -23,6 +24,7 @@ class CoachService(
     private val coachClientRepository: CoachClientRepository,
     private val userRepository: UserRepository,
     private val clientNoteRepository: ClientNoteRepository,
+    private val workingHourRepository: CoachWorkingHourRepository,
     private val scheduleService: ScheduleService,
 ) {
 
@@ -98,8 +100,41 @@ class CoachService(
         request.sessionRemindersEnabled?.let { coach.sessionRemindersEnabled = it }
         request.diaryRemindersEnabled?.let { coach.diaryRemindersEnabled = it }
         request.checkInRemindersEnabled?.let { coach.checkInRemindersEnabled = it }
+        request.workingHours?.let { replaceWorkingHours(coachId = coach.id, workingHours = it) }
         return toPolicyResponse(coach)
     }
+
+    private fun replaceWorkingHours(coachId: UUID, workingHours: List<WorkingDayDto>) {
+        val duplicatedDay = workingHours.groupBy { it.dayOfWeek }.any { it.value.size > 1 }
+        if (duplicatedDay) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "День недели в графике повторяется")
+        }
+        if (workingHours.any { it.closesAt <= it.opensAt }) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Время «по» должно быть позже времени «с»")
+        }
+        workingHourRepository.deleteAllOfCoach(coachId)
+        workingHourRepository.saveAll(
+            workingHours.map { day ->
+                CoachWorkingHourEntity(
+                    id = UUID.randomUUID(),
+                    coachId = coachId,
+                    dayOfWeek = day.dayOfWeek.value,
+                    opensAt = day.opensAt,
+                    closesAt = day.closesAt,
+                )
+            }
+        )
+    }
+
+    private fun workingHoursOf(coachId: UUID): List<WorkingDayDto> = workingHourRepository
+        .findByCoachIdOrderByDayOfWeek(coachId)
+        .map { hour ->
+            WorkingDayDto(
+                dayOfWeek = DayOfWeek.of(hour.dayOfWeek),
+                opensAt = hour.opensAt,
+                closesAt = hour.closesAt,
+            )
+        }
 
     private fun toPolicyResponse(coach: CoachEntity): CoachPolicyResponse = CoachPolicyResponse(
         cancellationWindowHours = coach.cancellationWindowHours,
@@ -107,6 +142,7 @@ class CoachService(
         sessionRemindersEnabled = coach.sessionRemindersEnabled,
         diaryRemindersEnabled = coach.diaryRemindersEnabled,
         checkInRemindersEnabled = coach.checkInRemindersEnabled,
+        workingHours = workingHoursOf(coach.id),
     )
 
     @Transactional
@@ -137,6 +173,7 @@ class CoachService(
                     displayName = coachUser.displayName,
                     zoneId = coach.zoneId,
                     cancellationWindowHours = coach.cancellationWindowHours,
+                    workingHours = workingHoursOf(coach.id),
                 )
             }
     }
