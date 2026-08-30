@@ -73,7 +73,7 @@ class MissedSessionsTest {
             participation(daysAgo = 8, status = SlotLifecycle.COMPLETED),
         )
 
-        val missed = service.missedSessionsByClient(COACH_USER_ID)
+        val missed = service.missedSessionsByClient(coachUserId = COACH_USER_ID, clientUserIds = listOf(CLIENT))
 
         assertEquals(2, missed[CLIENT])
     }
@@ -85,7 +85,7 @@ class MissedSessionsTest {
             participation(daysAgo = 4, status = SlotLifecycle.SCHEDULED),
         )
 
-        val missed = service.missedSessionsByClient(COACH_USER_ID)
+        val missed = service.missedSessionsByClient(coachUserId = COACH_USER_ID, clientUserIds = listOf(CLIENT))
 
         assertTrue(missed.isEmpty(), "последняя тренировка состоялась — человек не пропадал")
     }
@@ -97,7 +97,7 @@ class MissedSessionsTest {
             participation(daysAgo = 4, status = SlotLifecycle.COMPLETED),
         )
 
-        val missed = service.missedSessionsByClient(COACH_USER_ID)
+        val missed = service.missedSessionsByClient(coachUserId = COACH_USER_ID, clientUserIds = listOf(CLIENT))
 
         assertTrue(missed.isEmpty(), "отменённое занятие никто не пропускал")
     }
@@ -106,14 +106,14 @@ class MissedSessionsTest {
     fun `a client without past sessions is not counted`() {
         givenPast()
 
-        val missed = service.missedSessionsByClient(COACH_USER_ID)
+        val missed = service.missedSessionsByClient(coachUserId = COACH_USER_ID, clientUserIds = listOf(CLIENT))
 
         assertTrue(missed.isEmpty())
     }
 
     private fun givenPast(vararg participation: PastParticipation) {
         `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
-        `when`(participantRepository.findPastParticipation(anyNonNull(), anyNonNull(), anyNonNull()))
+        `when`(participantRepository.findPastParticipation(anyNonNull(), anyNonNull(), anyNonNull(), anyNonNull()))
             .thenReturn(participation.toList())
     }
 

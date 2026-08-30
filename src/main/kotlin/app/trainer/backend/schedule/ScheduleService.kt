@@ -4,6 +4,13 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
+import app.trainer.backend.config.MAX_PAGE_SIZE
+import app.trainer.backend.config.Page
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.config.encodeCursor
+import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.push.PushChannel
 import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
@@ -27,6 +34,7 @@ private const val PUSH_SLOT_ID_KEY = "slotId"
 private val WAITLIST_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 private const val PERSONAL_SLOT_CAPACITY = 1
 private const val MISSED_SESSIONS_WINDOW_DAYS = 30L
+private const val CHANGE_REQUESTS_PER_PAGE = 20
 
 @Service
 class ScheduleService(
@@ -88,14 +96,16 @@ class ScheduleService(
     }
 
     @Transactional(readOnly = true)
-    fun missedSessionsByClient(coachUserId: UUID): Map<UUID, Int> {
+    fun missedSessionsByClient(coachUserId: UUID, clientUserIds: List<UUID>): Map<UUID, Int> {
         val coach = requireCoach(coachUserId)
+        if (clientUserIds.isEmpty()) return emptyMap()
         val now = Instant.now(clock)
         return participantRepository
             .findPastParticipation(
                 coachId = coach.id,
                 from = now.minus(MISSED_SESSIONS_WINDOW_DAYS, ChronoUnit.DAYS),
                 to = now,
+                clientIds = clientUserIds.toTypedArray(),
             )
             .groupBy { it.getClientUserId() }
             .mapValues { (_, participation) -> countMissedInARow(participation) }
@@ -378,14 +388,41 @@ class ScheduleService(
     }
 
     @Transactional(readOnly = true)
-    fun pendingChangeRequests(coachUserId: UUID): List<SlotChangeRequestResponse> {
+    fun pendingChangeRequests(
+        coachUserId: UUID,
+        from: Instant?,
+        to: Instant?,
+        limit: Int?,
+        after: String?,
+    ): Page<SlotChangeRequestResponse> {
         val coach = requireCoach(coachUserId)
-        return changeRequestRepository
-            .findByCoachIdAndStatus(coachId = coach.id, status = SlotChangeStatus.PENDING.name)
-            .mapNotNull { request ->
-                val slot = slotRepository.findByIdOrNull(request.slotId) ?: return@mapNotNull null
+        val pageSize = if (from == null || to == null) {
+            pageSizeOf(limit) ?: CHANGE_REQUESTS_PER_PAGE
+        } else {
+            MAX_PAGE_SIZE
+        }
+        val cursor = decodeCursor(after)
+        val fetched = changeRequestRepository.findByCoachIdAndStatusPage(
+            coachId = coach.id,
+            status = SlotChangeStatus.PENDING.name,
+            from = from?.toString(),
+            to = to?.toString(),
+            afterCreatedAt = cursor?.sortKey,
+            afterId = cursor?.id,
+            pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
+        )
+        val requests = fetched.take(pageSize)
+        val last = requests.lastOrNull()?.takeIf { fetched.size > pageSize }
+        val slotsById = slotRepository
+            .findAllById(requests.map { it.slotId }.distinct())
+            .associateBy { it.id }
+        return Page(
+            items = requests.mapNotNull { request ->
+                val slot = slotsById[request.slotId] ?: return@mapNotNull null
                 toResponse(request = request, slot = slot)
-            }
+            },
+            nextCursor = last?.let { encodeCursor(PageCursor(sortKey = it.createdAt.toString(), id = it.id)) },
+        )
     }
 
     @Transactional

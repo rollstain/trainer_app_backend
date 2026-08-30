@@ -81,14 +81,29 @@ interface SlotChangeRequestRepository : JpaRepository<SlotChangeRequestEntity, U
         value = """
             select r.* from slot_change_requests r
             join training_slots s on s.id = r.slot_id
-            where s.coach_id = :coachId and r.status = :status
-            order by r.created_at asc
+            where s.coach_id = :coachId
+              and r.status = :status
+              and (
+                cast(:from as text) is null
+                or s.starts_at between cast(:from as timestamptz) and cast(:to as timestamptz)
+              )
+              and (
+                cast(:afterCreatedAt as text) is null
+                or (r.created_at, r.id) > (cast(:afterCreatedAt as timestamptz), cast(:afterId as uuid))
+              )
+            order by r.created_at asc, r.id asc
+            limit :pageSize
         """,
         nativeQuery = true,
     )
-    fun findByCoachIdAndStatus(
+    fun findByCoachIdAndStatusPage(
         @Param("coachId") coachId: UUID,
         @Param("status") status: String,
+        @Param("from") from: String?,
+        @Param("to") to: String?,
+        @Param("afterCreatedAt") afterCreatedAt: String?,
+        @Param("afterId") afterId: UUID?,
+        @Param("pageSize") pageSize: Int,
     ): List<SlotChangeRequestEntity>
 }
 
@@ -101,6 +116,7 @@ interface SlotParticipantRepository : JpaRepository<SlotParticipantEntity, UUID>
             join training_slots s on s.id = p.slot_id
             where s.coach_id = :coachId
               and s.starts_at between :from and :to
+              and p.user_id = any (cast(:clientIds as uuid[]))
             order by p.user_id, s.starts_at desc
         """,
         nativeQuery = true,
@@ -109,6 +125,7 @@ interface SlotParticipantRepository : JpaRepository<SlotParticipantEntity, UUID>
         @Param("coachId") coachId: UUID,
         @Param("from") from: Instant,
         @Param("to") to: Instant,
+        @Param("clientIds") clientIds: Array<UUID>,
     ): List<PastParticipation>
 
     fun findBySlotId(slotId: UUID): List<SlotParticipantEntity>

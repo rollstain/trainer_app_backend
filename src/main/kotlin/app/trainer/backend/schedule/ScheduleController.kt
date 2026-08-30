@@ -1,10 +1,12 @@
 package app.trainer.backend.schedule
 
 import app.trainer.backend.config.CurrentUserId
+import app.trainer.backend.config.pageResponse
 import jakarta.validation.Valid
 import java.time.Instant
 import java.util.UUID
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -119,8 +121,22 @@ class ScheduleController(private val scheduleService: ScheduleService) {
     }
 
     @GetMapping("/change-requests/pending")
-    fun pendingChangeRequests(@CurrentUserId coachUserId: UUID): List<SlotChangeRequestResponse> {
-        return scheduleService.pendingChangeRequests(coachUserId = coachUserId)
+    fun pendingChangeRequests(
+        @CurrentUserId coachUserId: UUID,
+        @RequestParam(required = false) from: Instant?,
+        @RequestParam(required = false) to: Instant?,
+        @RequestParam(required = false) limit: Int?,
+        @RequestParam(required = false) after: String?,
+    ): ResponseEntity<List<SlotChangeRequestResponse>> {
+        return pageResponse(
+            scheduleService.pendingChangeRequests(
+                coachUserId = coachUserId,
+                from = from,
+                to = to,
+                limit = limit,
+                after = after,
+            )
+        )
     }
 
     @PostMapping("/change-requests/{requestId}/resolve")

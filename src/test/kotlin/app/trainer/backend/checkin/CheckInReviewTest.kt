@@ -5,6 +5,8 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
@@ -28,11 +30,14 @@ private val COACH_ID: UUID = UUID.fromString("20000000-0000-0000-0000-0000000000
 private val CLIENT_USER_ID: UUID = UUID.fromString("20000000-0000-0000-0000-000000000003")
 private val CHECK_IN_ID: UUID = UUID.fromString("20000000-0000-0000-0000-000000000004")
 private val OTHER_CLIENT_ID: UUID = UUID.fromString("20000000-0000-0000-0000-000000000005")
+private val OTHER_CHECK_IN_ID: UUID = UUID.fromString("20000000-0000-0000-0000-000000000006")
+private val THIRD_CHECK_IN_ID: UUID = UUID.fromString("20000000-0000-0000-0000-000000000007")
 private val NOW: Instant = Instant.parse("2026-03-02T09:00:00Z")
 private val CHECK_IN_DATE: LocalDate = LocalDate.of(2026, 3, 1)
 private const val CANCELLATION_WINDOW_HOURS = 12
 private const val REMINDER_HOUR = 10
-private const val AWAITING_LIMIT = 20
+private const val PAGE_SIZE = 2
+private const val PAGE_SIZE_WITH_PROBE = PAGE_SIZE + 1
 
 class CheckInReviewTest {
 
@@ -55,15 +60,32 @@ class CheckInReviewTest {
     @Test
     fun `check-ins waiting for an answer come back with the client name`() {
         `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
-        `when`(checkInRepository.findAwaitingReview(COACH_ID, AWAITING_LIMIT))
+        `when`(checkInRepository.findAwaitingPage(COACH_ID, null, null, PAGE_SIZE_WITH_PROBE))
             .thenReturn(listOf(checkIn()))
         `when`(userRepository.findAllById(listOf(CLIENT_USER_ID))).thenReturn(listOf(client()))
 
-        val awaiting = service.awaitingReview(coachUserId = COACH_USER_ID)
+        val awaiting = service.awaitingReview(coachUserId = COACH_USER_ID, limit = PAGE_SIZE, after = null)
 
-        assertEquals(1, awaiting.size)
-        assertEquals("Анна", awaiting.single().clientDisplayName)
-        assertEquals(CHECK_IN_DATE, awaiting.single().checkInDate)
+        assertEquals(1, awaiting.items.size)
+        assertEquals("Анна", awaiting.items.single().clientDisplayName)
+        assertEquals(CHECK_IN_DATE, awaiting.items.single().checkInDate)
+        assertNull(awaiting.nextCursor, "очередь уместилась целиком — продолжения нет")
+    }
+
+    @Test
+    fun `a full page of check-ins comes back with a cursor to the rest`() {
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(checkInRepository.findAwaitingPage(COACH_ID, null, null, PAGE_SIZE_WITH_PROBE))
+            .thenReturn(listOf(checkIn(), checkIn(id = OTHER_CHECK_IN_ID), checkIn(id = THIRD_CHECK_IN_ID)))
+        `when`(userRepository.findAllById(listOf(CLIENT_USER_ID))).thenReturn(listOf(client()))
+
+        val awaiting = service.awaitingReview(coachUserId = COACH_USER_ID, limit = PAGE_SIZE, after = null)
+
+        assertEquals(PAGE_SIZE, awaiting.items.size)
+        assertEquals(
+            PageCursor(sortKey = CHECK_IN_DATE.toString(), id = OTHER_CHECK_IN_ID),
+            decodeCursor(awaiting.nextCursor),
+        )
     }
 
     @Test
@@ -71,7 +93,7 @@ class CheckInReviewTest {
         `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(null)
 
         val failure = assertFailsWith<ResponseStatusException> {
-            service.awaitingReview(coachUserId = COACH_USER_ID)
+            service.awaitingReview(coachUserId = COACH_USER_ID, limit = PAGE_SIZE, after = null)
         }
 
         assertEquals(HttpStatus.FORBIDDEN, failure.statusCode)
@@ -184,8 +206,8 @@ class CheckInReviewTest {
         createdAt = NOW,
     )
 
-    private fun checkIn(clientUserId: UUID = CLIENT_USER_ID): CheckInEntity = CheckInEntity(
-        id = CHECK_IN_ID,
+    private fun checkIn(clientUserId: UUID = CLIENT_USER_ID, id: UUID = CHECK_IN_ID): CheckInEntity = CheckInEntity(
+        id = id,
         clientUserId = clientUserId,
         checkInDate = CHECK_IN_DATE,
         weightGrams = null,

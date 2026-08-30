@@ -4,6 +4,12 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
+import app.trainer.backend.config.Page
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.config.encodeCursor
+import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.traininglog.ExerciseEntity
 import app.trainer.backend.traininglog.ExerciseOwnerKind
 import app.trainer.backend.traininglog.ExerciseRepository
@@ -19,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val DAYS_IN_WEEK = 7
+private const val PROGRAMS_PER_PAGE = 20
 private const val MAX_PLANNED_RANGE_DAYS = 62L
 
 @Service
@@ -34,28 +41,32 @@ class ProgramService(
 ) {
 
     @Transactional(readOnly = true)
-    fun programsOf(coachUserId: UUID): List<ProgramSummaryResponse> {
+    fun programsOf(coachUserId: UUID, limit: Int?, after: String?): Page<ProgramSummaryResponse> {
         val coach = requireCoach(coachUserId)
-        val programs = programRepository.findByCoachIdAndArchivedAtIsNullOrderByCreatedAtDesc(coach.id)
-        val assignedByProgram = assignmentRepository
-            .findByCoachIdAndEndedAtIsNull(coach.id)
-            .groupingBy { it.programId }
-            .eachCount()
-        return programs.map { program ->
-            val days = dayRepository.findByProgramIdOrderByWeekNumberAscDayOfWeekAsc(program.id)
-            val filled = exerciseLineRepository
-                .findByProgramDayIdInOrderByPositionAsc(days.map { it.id })
-                .map { it.programDayId }
-                .distinct()
-                .size
-            ProgramSummaryResponse(
-                id = program.id,
-                title = program.title,
-                weeksCount = program.weeksCount,
-                filledDaysCount = filled,
-                assignedClientsCount = assignedByProgram[program.id] ?: 0,
-            )
-        }
+        val pageSize = pageSizeOf(limit) ?: PROGRAMS_PER_PAGE
+        val cursor = decodeCursor(after)
+        val fetched = programRepository.findPage(
+            coachId = coach.id,
+            afterCreatedAt = cursor?.sortKey,
+            afterId = cursor?.id,
+            pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
+        )
+        val rows = fetched.take(pageSize)
+        val last = rows.lastOrNull()?.takeIf { fetched.size > pageSize }
+        return Page(
+            items = rows.map { row ->
+                ProgramSummaryResponse(
+                    id = row.getProgramId(),
+                    title = row.getTitle(),
+                    weeksCount = row.getWeeksCount(),
+                    filledDaysCount = row.getFilledDaysCount().toInt(),
+                    assignedClientsCount = row.getAssignedClientsCount().toInt(),
+                )
+            },
+            nextCursor = last?.let {
+                encodeCursor(PageCursor(sortKey = it.getCreatedAt().toString(), id = it.getProgramId()))
+            },
+        )
     }
 
     @Transactional

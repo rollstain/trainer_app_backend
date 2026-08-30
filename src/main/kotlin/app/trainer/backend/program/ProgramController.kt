@@ -1,11 +1,13 @@
 package app.trainer.backend.program
 
 import app.trainer.backend.config.CurrentUserId
+import app.trainer.backend.config.pageResponse
 import jakarta.validation.Valid
 import java.time.LocalDate
 import java.util.UUID
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -20,8 +22,12 @@ import org.springframework.web.bind.annotation.RestController
 class ProgramController(private val programService: ProgramService) {
 
     @GetMapping("/coach/programs")
-    fun programs(@CurrentUserId coachUserId: UUID): List<ProgramSummaryResponse> {
-        return programService.programsOf(coachUserId = coachUserId)
+    fun programs(
+        @CurrentUserId coachUserId: UUID,
+        @RequestParam(required = false) limit: Int?,
+        @RequestParam(required = false) after: String?,
+    ): ResponseEntity<List<ProgramSummaryResponse>> {
+        return pageResponse(programService.programsOf(coachUserId = coachUserId, limit = limit, after = after))
     }
 
     @PostMapping("/coach/programs")

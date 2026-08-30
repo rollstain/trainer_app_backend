@@ -74,14 +74,20 @@ interface CheckInRepository : JpaRepository<CheckInEntity, UUID> {
             where l.coach_id = :coachId
               and l.status = 'ACTIVE'
               and c.reviewed_at is null
-            order by c.check_in_date desc
-            limit :limit
+              and (
+                cast(:afterCheckInDate as text) is null
+                or (c.check_in_date, c.id) < (cast(:afterCheckInDate as date), cast(:afterId as uuid))
+              )
+            order by c.check_in_date desc, c.id desc
+            limit :pageSize
         """,
         nativeQuery = true,
     )
-    fun findAwaitingReview(
+    fun findAwaitingPage(
         @Param("coachId") coachId: UUID,
-        @Param("limit") limit: Int,
+        @Param("afterCheckInDate") afterCheckInDate: String?,
+        @Param("afterId") afterId: UUID?,
+        @Param("pageSize") pageSize: Int,
     ): List<CheckInEntity>
 
     fun findByClientUserIdAndCheckInDate(clientUserId: UUID, checkInDate: LocalDate): CheckInEntity?

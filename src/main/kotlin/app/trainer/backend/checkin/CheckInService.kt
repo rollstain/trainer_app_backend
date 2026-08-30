@@ -4,6 +4,12 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
+import app.trainer.backend.config.Page
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.config.encodeCursor
+import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.media.MediaFileResponse
 import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.media.MediaOwnerKind
@@ -20,7 +26,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
-private const val AWAITING_REVIEW_LIMIT = 20
+private const val AWAITING_CHECK_INS_PER_PAGE = 20
 
 @Service
 class CheckInService(
@@ -33,26 +39,36 @@ class CheckInService(
 ) {
 
     @Transactional(readOnly = true)
-    fun awaitingReview(coachUserId: UUID): List<AwaitingCheckInResponse> {
+    fun awaitingReview(coachUserId: UUID, limit: Int?, after: String?): Page<AwaitingCheckInResponse> {
         val coach = coachRepository.findByUserId(coachUserId)
             ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не тренер")
-        val awaiting = checkInRepository.findAwaitingReview(
+        val pageSize = pageSizeOf(limit) ?: AWAITING_CHECK_INS_PER_PAGE
+        val cursor = decodeCursor(after)
+        val fetched = checkInRepository.findAwaitingPage(
             coachId = coach.id,
-            limit = AWAITING_REVIEW_LIMIT,
+            afterCheckInDate = cursor?.sortKey,
+            afterId = cursor?.id,
+            pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
         )
-        if (awaiting.isEmpty()) return emptyList()
+        val awaiting = fetched.take(pageSize)
+        val last = awaiting.lastOrNull()?.takeIf { fetched.size > pageSize }
         val names = userRepository
             .findAllById(awaiting.map { it.clientUserId }.distinct())
             .associate { it.id to it.displayName }
-        return awaiting.mapNotNull { checkIn ->
-            val name = names[checkIn.clientUserId] ?: return@mapNotNull null
-            AwaitingCheckInResponse(
-                checkInId = checkIn.id,
-                clientUserId = checkIn.clientUserId,
-                clientDisplayName = name,
-                checkInDate = checkIn.checkInDate,
-            )
-        }
+        return Page(
+            items = awaiting.mapNotNull { checkIn ->
+                val name = names[checkIn.clientUserId] ?: return@mapNotNull null
+                AwaitingCheckInResponse(
+                    checkInId = checkIn.id,
+                    clientUserId = checkIn.clientUserId,
+                    clientDisplayName = name,
+                    checkInDate = checkIn.checkInDate,
+                )
+            },
+            nextCursor = last?.let {
+                encodeCursor(PageCursor(sortKey = it.checkInDate.toString(), id = it.id))
+            },
+        )
     }
 
     @Transactional

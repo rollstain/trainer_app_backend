@@ -1,10 +1,12 @@
 package app.trainer.backend.chat
 
 import app.trainer.backend.config.CurrentUserId
+import app.trainer.backend.config.pageResponse
 import app.trainer.backend.media.PrepareUploadRequest
 import app.trainer.backend.media.PrepareUploadResponse
 import jakarta.validation.Valid
 import java.util.UUID
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -18,8 +20,12 @@ import org.springframework.web.bind.annotation.RestController
 class ChatController(private val chatService: ChatService) {
 
     @GetMapping
-    fun dialogs(@CurrentUserId userId: UUID): List<DialogResponse> {
-        return chatService.dialogsOf(userId = userId)
+    fun dialogs(
+        @CurrentUserId userId: UUID,
+        @RequestParam(required = false) limit: Int?,
+        @RequestParam(required = false) after: String?,
+    ): ResponseEntity<List<DialogResponse>> {
+        return pageResponse(chatService.dialogsOf(userId = userId, limit = limit, after = after))
     }
 
     @GetMapping("/{dialogId}/messages")

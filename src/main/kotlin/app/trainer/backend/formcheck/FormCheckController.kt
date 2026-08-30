@@ -1,14 +1,17 @@
 package app.trainer.backend.formcheck
 
 import app.trainer.backend.config.CurrentUserId
+import app.trainer.backend.config.pageResponse
 import app.trainer.backend.media.PrepareUploadRequest
 import app.trainer.backend.media.PrepareUploadResponse
 import jakarta.validation.Valid
 import java.util.UUID
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -31,13 +34,25 @@ class FormCheckController(private val formCheckService: FormCheckService) {
     }
 
     @GetMapping("/me/form-checks")
-    fun ownFormChecks(@CurrentUserId clientUserId: UUID): List<FormCheckResponse> {
-        return formCheckService.ownFormChecks(clientUserId = clientUserId)
+    fun ownFormChecks(
+        @CurrentUserId clientUserId: UUID,
+        @RequestParam(required = false) limit: Int?,
+        @RequestParam(required = false) after: String?,
+    ): ResponseEntity<List<FormCheckResponse>> {
+        return pageResponse(
+            formCheckService.ownFormChecks(clientUserId = clientUserId, limit = limit, after = after)
+        )
     }
 
     @GetMapping("/coach/form-checks/awaiting")
-    fun awaiting(@CurrentUserId coachUserId: UUID): List<FormCheckResponse> {
-        return formCheckService.awaitingReview(coachUserId = coachUserId)
+    fun awaiting(
+        @CurrentUserId coachUserId: UUID,
+        @RequestParam(required = false) limit: Int?,
+        @RequestParam(required = false) after: String?,
+    ): ResponseEntity<List<FormCheckResponse>> {
+        return pageResponse(
+            formCheckService.awaitingReview(coachUserId = coachUserId, limit = limit, after = after)
+        )
     }
 
     @PostMapping("/coach/form-checks/{formCheckId}/review")

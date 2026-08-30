@@ -5,6 +5,9 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.media.MediaOwnerKind
 import app.trainer.backend.traininglog.ExerciseRepository
@@ -35,7 +38,11 @@ private val COACH_ID: UUID = UUID.fromString("80000000-0000-0000-0000-0000000000
 private val OTHER_COACH_ID: UUID = UUID.fromString("80000000-0000-0000-0000-000000000004")
 private val VIDEO_ID: UUID = UUID.fromString("80000000-0000-0000-0000-000000000005")
 private val FORM_CHECK_ID: UUID = UUID.fromString("80000000-0000-0000-0000-000000000006")
+private val OTHER_FORM_CHECK_ID: UUID = UUID.fromString("80000000-0000-0000-0000-000000000007")
+private val THIRD_FORM_CHECK_ID: UUID = UUID.fromString("80000000-0000-0000-0000-000000000008")
 private val NOW: Instant = Instant.parse("2026-03-02T09:00:00Z")
+private const val PAGE_SIZE = 2
+private const val PAGE_SIZE_WITH_PROBE = PAGE_SIZE + 1
 private const val WINDOW_HOURS = 12
 private const val MORNING_HOUR = 10
 
@@ -166,18 +173,55 @@ class FormCheckServiceTest {
     @Test
     fun `the awaiting queue reads names and exercises in one go`() {
         givenCoach()
-        `when`(
-            formCheckRepository.findByCoachIdAndReviewedAtIsNullOrderByCreatedAtDesc(anyNonNull(), anyNonNull())
-        ).thenReturn(listOf(formCheck(), formCheck()))
+        `when`(formCheckRepository.findAwaitingPage(COACH_ID, null, null, PAGE_SIZE_WITH_PROBE))
+            .thenReturn(listOf(formCheck(), formCheck(id = OTHER_FORM_CHECK_ID)))
         `when`(userRepository.findAllById(anyNonNull())).thenReturn(listOf(client()))
         `when`(exerciseRepository.findAllById(anyNonNull())).thenReturn(emptyList())
 
-        val awaiting = service.awaitingReview(coachUserId = COACH_USER_ID)
+        val awaiting = service.awaitingReview(coachUserId = COACH_USER_ID, limit = PAGE_SIZE, after = null)
 
-        assertEquals(2, awaiting.size)
-        assertEquals(listOf("Анна", "Анна"), awaiting.map { it.clientDisplayName })
+        assertEquals(2, awaiting.items.size)
+        assertEquals(listOf("Анна", "Анна"), awaiting.items.map { it.clientDisplayName })
+        assertNull(awaiting.nextCursor, "очередь уместилась целиком — продолжения нет")
         verify(userRepository, times(1)).findAllById(anyNonNull())
         verify(userRepository, never()).findById(anyNonNull())
+    }
+
+    @Test
+    fun `a full page of the awaiting queue points at the rest with a cursor`() {
+        givenCoach()
+        `when`(formCheckRepository.findAwaitingPage(COACH_ID, null, null, PAGE_SIZE_WITH_PROBE))
+            .thenReturn(
+                listOf(formCheck(), formCheck(id = OTHER_FORM_CHECK_ID), formCheck(id = THIRD_FORM_CHECK_ID))
+            )
+        `when`(userRepository.findAllById(anyNonNull())).thenReturn(listOf(client()))
+        `when`(exerciseRepository.findAllById(anyNonNull())).thenReturn(emptyList())
+
+        val awaiting = service.awaitingReview(coachUserId = COACH_USER_ID, limit = PAGE_SIZE, after = null)
+
+        assertEquals(PAGE_SIZE, awaiting.items.size)
+        assertEquals(
+            PageCursor(sortKey = NOW.toString(), id = OTHER_FORM_CHECK_ID),
+            decodeCursor(awaiting.nextCursor),
+        )
+    }
+
+    @Test
+    fun `the next page of own history starts after the cursor`() {
+        `when`(
+            formCheckRepository.findClientPage(CLIENT_USER_ID, NOW.toString(), FORM_CHECK_ID, PAGE_SIZE_WITH_PROBE)
+        ).thenReturn(listOf(formCheck(id = OTHER_FORM_CHECK_ID)))
+        `when`(userRepository.findAllById(anyNonNull())).thenReturn(listOf(client()))
+        `when`(exerciseRepository.findAllById(anyNonNull())).thenReturn(emptyList())
+
+        val history = service.ownFormChecks(
+            clientUserId = CLIENT_USER_ID,
+            limit = PAGE_SIZE,
+            after = encodeCursor(PageCursor(sortKey = NOW.toString(), id = FORM_CHECK_ID)),
+        )
+
+        assertEquals(listOf(OTHER_FORM_CHECK_ID), history.items.map { it.id })
+        assertNull(history.nextCursor)
     }
 
     private fun givenCoach() {
@@ -221,8 +265,8 @@ class FormCheckServiceTest {
         createdAt = NOW,
     )
 
-    private fun formCheck(coachId: UUID = COACH_ID): FormCheckEntity = FormCheckEntity(
-        id = FORM_CHECK_ID,
+    private fun formCheck(coachId: UUID = COACH_ID, id: UUID = FORM_CHECK_ID): FormCheckEntity = FormCheckEntity(
+        id = id,
         clientUserId = CLIENT_USER_ID,
         coachId = coachId,
         exerciseId = null,

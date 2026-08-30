@@ -1,12 +1,14 @@
 package app.trainer.backend.checkin
 
 import app.trainer.backend.config.CurrentUserId
+import app.trainer.backend.config.pageResponse
 import app.trainer.backend.media.PrepareUploadRequest
 import app.trainer.backend.media.PrepareUploadResponse
 import jakarta.validation.Valid
 import java.time.LocalDate
 import java.util.UUID
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -51,8 +53,14 @@ class CheckInController(private val checkInService: CheckInService) {
     }
 
     @GetMapping("/coach/check-ins/awaiting")
-    fun awaiting(@CurrentUserId coachUserId: UUID): List<AwaitingCheckInResponse> {
-        return checkInService.awaitingReview(coachUserId = coachUserId)
+    fun awaiting(
+        @CurrentUserId coachUserId: UUID,
+        @RequestParam(required = false) limit: Int?,
+        @RequestParam(required = false) after: String?,
+    ): ResponseEntity<List<AwaitingCheckInResponse>> {
+        return pageResponse(
+            checkInService.awaitingReview(coachUserId = coachUserId, limit = limit, after = after)
+        )
     }
 
     @PostMapping("/coach/clients/{clientUserId}/check-ins/{checkInId}/review")

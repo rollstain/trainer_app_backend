@@ -38,8 +38,11 @@ class CoachController(private val coachService: CoachService) {
     }
 
     @GetMapping("/coach/clients/missed-sessions")
-    fun missedSessions(@CurrentUserId coachUserId: UUID): List<MissedSessionsResponse> {
-        return coachService.missedSessions(coachUserId)
+    fun missedSessions(
+        @CurrentUserId coachUserId: UUID,
+        @RequestParam clientUserIds: List<UUID>,
+    ): List<MissedSessionsResponse> {
+        return coachService.missedSessions(coachUserId = coachUserId, clientUserIds = clientUserIds)
     }
 
     @DeleteMapping("/coach/clients/{clientUserId}")

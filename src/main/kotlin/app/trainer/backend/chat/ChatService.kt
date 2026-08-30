@@ -1,6 +1,12 @@
 package app.trainer.backend.chat
 
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
+import app.trainer.backend.config.Page
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.config.encodeCursor
+import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.media.MediaFileResponse
 import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.media.MediaOwnerKind
@@ -22,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val HISTORY_PAGE_SIZE = 50
+private const val DIALOGS_PER_PAGE = 30
 private const val PUSH_BODY_MAX_LENGTH = 120
 private const val PUSH_DIALOG_ID_KEY = "dialogId"
 
@@ -154,56 +161,39 @@ class ChatService(
     }
 
     @Transactional(readOnly = true)
-    fun dialogsOf(userId: UUID): List<DialogResponse> {
-        val coach = coachRepository.findByUserId(userId)
-        val dialogs = if (coach == null) {
-            dialogRepository.findByClientUserId(userId)
-        } else {
-            dialogRepository.findByCoachId(coach.id)
-        }
-        return dialogs
-            .mapNotNull { dialog -> toListResponse(dialog = dialog, userId = userId, viewerIsCoach = coach != null) }
-            .sortedByDescending { it.lastMessage?.createdAt ?: Instant.EPOCH }
+    fun dialogsOf(userId: UUID, limit: Int?, after: String?): Page<DialogResponse> {
+        val pageSize = pageSizeOf(limit) ?: DIALOGS_PER_PAGE
+        val cursor = decodeCursor(after)
+        val fetched = dialogRepository.findPage(
+            viewerUserId = userId,
+            afterSortKey = cursor?.sortKey,
+            afterId = cursor?.id,
+            pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
+        )
+        val rows = fetched.take(pageSize)
+        val hasMore = fetched.size > pageSize
+        val last = rows.lastOrNull()?.takeIf { hasMore }
+        return Page(
+            items = rows.map(::toListResponse),
+            nextCursor = last?.let {
+                encodeCursor(PageCursor(sortKey = it.getSortKey().toString(), id = it.getDialogId()))
+            },
+        )
     }
 
-    private fun toListResponse(
-        dialog: DialogEntity,
-        userId: UUID,
-        viewerIsCoach: Boolean,
-    ): DialogResponse? {
-        val peerUserId = if (viewerIsCoach) {
-            dialog.clientUserId
-        } else {
-            coachRepository.findByIdOrNull(dialog.coachId)?.userId ?: return null
-        }
-        val peer = userRepository.findByIdOrNull(peerUserId) ?: return null
-        val readSeq = dialogReadRepository
-            .findByDialogIdAndUserId(dialogId = dialog.id, userId = userId)
-            ?.readSeq
-            ?: 0
-        val peerReadSeq = dialogReadRepository
-            .findByDialogIdAndUserId(dialogId = dialog.id, userId = peerUserId)
-            ?.readSeq
-            ?: 0
-        val unreadCount = messageRepository.countByDialogIdAndSeqGreaterThanAndSenderUserIdNot(
-            dialogId = dialog.id,
-            seq = readSeq,
-            senderUserId = userId,
-        )
-        val lastMessage = messageRepository.findFirstByDialogIdOrderBySeqDesc(dialog.id)
-        return DialogResponse(
-            id = dialog.id,
-            coachId = dialog.coachId,
-            clientUserId = dialog.clientUserId,
-            peerUserId = peer.id,
-            peerDisplayName = peer.displayName,
-            lastMessageSeq = dialog.lastMessageSeq,
-            readSeq = readSeq,
-            peerReadSeq = peerReadSeq,
-            unreadCount = unreadCount,
-            lastMessage = lastMessage?.let { toResponse(message = it) },
-        )
-    }
+    private fun toListResponse(row: DialogListRow): DialogResponse = DialogResponse(
+        id = row.getDialogId(),
+        coachId = row.getCoachId(),
+        clientUserId = row.getClientUserId(),
+        peerUserId = row.getPeerUserId(),
+        peerDisplayName = row.getPeerDisplayName(),
+        lastMessageSeq = row.getLastMessageSeq(),
+        readSeq = row.getReadSeq(),
+        peerReadSeq = row.getPeerReadSeq(),
+        unreadCount = row.getUnreadCount(),
+        lastMessagePreview = row.getMessageBody(),
+        lastMessageAt = row.getMessageCreatedAt(),
+    )
 
     @Transactional
     fun openDialog(coachId: UUID, clientUserId: UUID): DialogEntity {

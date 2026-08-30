@@ -4,6 +4,12 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
+import app.trainer.backend.config.Page
+import app.trainer.backend.config.PageCursor
+import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.config.encodeCursor
+import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.media.MediaOwnerKind
 import app.trainer.backend.media.PrepareUploadRequest
@@ -13,15 +19,13 @@ import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
-import org.springframework.data.domain.Limit
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
-private const val OWN_HISTORY_LIMIT = 50
-private const val AWAITING_LIMIT = 20
+private const val FORM_CHECKS_PER_PAGE = 20
 
 @Service
 class FormCheckService(
@@ -72,24 +76,39 @@ class FormCheckService(
     }
 
     @Transactional(readOnly = true)
-    fun ownFormChecks(clientUserId: UUID): List<FormCheckResponse> {
-        return formCheckRepository
-            .findByClientUserIdOrderByCreatedAtDesc(
-                clientUserId = clientUserId,
-                limit = Limit.of(OWN_HISTORY_LIMIT),
-            )
-            .let(::toResponses)
+    fun ownFormChecks(clientUserId: UUID, limit: Int?, after: String?): Page<FormCheckResponse> {
+        val pageSize = pageSizeOf(limit) ?: FORM_CHECKS_PER_PAGE
+        val cursor = decodeCursor(after)
+        val fetched = formCheckRepository.findClientPage(
+            clientUserId = clientUserId,
+            afterCreatedAt = cursor?.sortKey,
+            afterId = cursor?.id,
+            pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
+        )
+        return pageOf(fetched = fetched, pageSize = pageSize)
     }
 
     @Transactional(readOnly = true)
-    fun awaitingReview(coachUserId: UUID): List<FormCheckResponse> {
+    fun awaitingReview(coachUserId: UUID, limit: Int?, after: String?): Page<FormCheckResponse> {
         val coach = requireCoach(coachUserId)
-        return formCheckRepository
-            .findByCoachIdAndReviewedAtIsNullOrderByCreatedAtDesc(
-                coachId = coach.id,
-                limit = Limit.of(AWAITING_LIMIT),
-            )
-            .let(::toResponses)
+        val pageSize = pageSizeOf(limit) ?: FORM_CHECKS_PER_PAGE
+        val cursor = decodeCursor(after)
+        val fetched = formCheckRepository.findAwaitingPage(
+            coachId = coach.id,
+            afterCreatedAt = cursor?.sortKey,
+            afterId = cursor?.id,
+            pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
+        )
+        return pageOf(fetched = fetched, pageSize = pageSize)
+    }
+
+    private fun pageOf(fetched: List<FormCheckEntity>, pageSize: Int): Page<FormCheckResponse> {
+        val formChecks = fetched.take(pageSize)
+        val last = formChecks.lastOrNull()?.takeIf { fetched.size > pageSize }
+        return Page(
+            items = toResponses(formChecks),
+            nextCursor = last?.let { encodeCursor(PageCursor(sortKey = it.createdAt.toString(), id = it.id)) },
+        )
     }
 
     @Transactional
