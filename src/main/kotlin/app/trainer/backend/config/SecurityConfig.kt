@@ -73,6 +73,7 @@ class SecurityConfig(private val properties: AuthProperties) {
                 it.requestMatchers("/ws/**").permitAll()
                 it.requestMatchers("/i/*", "/r/*", "/c/*", "/legal/*", "/.well-known/**").permitAll()
                 it.requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                it.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
                 it.anyRequest().authenticated()
             }
             .oauth2ResourceServer { it.jwt { } }
