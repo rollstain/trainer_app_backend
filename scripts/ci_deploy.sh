@@ -22,8 +22,8 @@ if [ "$(stat -c %s "$incoming_jar")" -lt "$minimal_jar_bytes" ]; then
     exit 1
 fi
 
-if ! unzip -l "$incoming_jar" > /dev/null 2>&1; then
-    echo "пришедший файл не разбирается как архив jar" >&2
+if ! python3 -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).getinfo("META-INF/MANIFEST.MF")' "$incoming_jar"; then
+    echo "пришедший файл не разбирается как jar с манифестом" >&2
     exit 1
 fi
 
