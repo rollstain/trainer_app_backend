@@ -44,6 +44,15 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
 trainer:
   auth:
     access-token-ttl-minutes: 15

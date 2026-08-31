@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Сборка jar и GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Версия и список изменений
+        id: meta
+        run: ./scripts/release_meta.sh release-notes.txt
+
+      - name: Миграции не переопределяют существующие объекты
+        run: python3 scripts/check_migrations.py
+
+      - name: Тесты
+        run: ./gradlew test --console=plain
+
+      - name: Сборка jar
+        run: ./gradlew bootJar --console=plain
+
+      - name: Имя артефакта
+        id: jar
+        run: |
+          built_jar=$(find build/libs -name '*.jar' -not -name '*-plain.jar' | head -1)
+          target="trainer-backend-${{ steps.meta.outputs.version }}.jar"
+          cp "$built_jar" "$target"
+          echo "path=$target" >> "$GITHUB_OUTPUT"
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.meta.outputs.tag }}" \
+            "${{ steps.jar.outputs.path }}" \
+            --title "${{ steps.meta.outputs.tag }}" \
+            --notes-file release-notes.txt
+
+      - name: Уведомление в Telegram
+        if: env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        run: |
+          ./scripts/telegram_notify.sh \
+            "trainer_backend ${{ steps.meta.outputs.version }} · релиз собран, на прод не выкачен" \
+            release-notes.txt

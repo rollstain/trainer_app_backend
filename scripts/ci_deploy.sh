@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_dir=/opt/trainer
+backups_dir=$app_dir/backups
+service=trainer
+current_jar=$app_dir/trainer-backend.jar
+previous_jar=$app_dir/trainer-backend.jar.bak
+backup_script=$app_dir/backup.sh
+health_url=${HEALTH_URL:-http://127.0.0.1:8080/actuator/health}
+health_attempts=36
+health_delay_seconds=5
+minimal_jar_bytes=$((10 * 1024 * 1024))
+
+incoming_jar=$(mktemp /tmp/trainer-backend-XXXXXX.jar)
+trap 'rm -f "$incoming_jar"' EXIT
+
+cat > "$incoming_jar"
+
+if [ "$(stat -c %s "$incoming_jar")" -lt "$minimal_jar_bytes" ]; then
+    echo "пришедший файл меньше $((minimal_jar_bytes / 1024 / 1024)) МБ — это не jar приложения" >&2
+    exit 1
+fi
+
+if ! unzip -l "$incoming_jar" > /dev/null 2>&1; then
+    echo "пришедший файл не разбирается как архив jar" >&2
+    exit 1
+fi
+
+newest_backup_before=$(ls -t "$backups_dir" 2>/dev/null | head -1 || echo "")
+"$backup_script"
+newest_backup_after=$(ls -t "$backups_dir" 2>/dev/null | head -1 || echo "")
+
+if [ "$newest_backup_after" = "$newest_backup_before" ]; then
+    echo "дамп базы не появился в $backups_dir — выкатку не начинаю" >&2
+    exit 1
+fi
+echo "дамп базы снят: $newest_backup_after"
+
+cp "$current_jar" "$previous_jar"
+install -o trainer -g trainer -m 644 "$incoming_jar" "$current_jar"
+systemctl restart "$service"
+
+attempt=1
+while [ "$attempt" -le "$health_attempts" ]; do
+    if curl --fail --silent --show-error --max-time 5 "$health_url" | grep -q '"status":"UP"'; then
+        echo "сервис отвечает UP, попытка $attempt"
+        systemctl is-active "$service" > /dev/null
+        exit 0
+    fi
+    sleep "$health_delay_seconds"
+    attempt=$((attempt + 1))
+done
+
+echo "за $((health_attempts * health_delay_seconds)) секунд сервис не ответил UP — возвращаю прежний jar" >&2
+install -o trainer -g trainer -m 644 "$previous_jar" "$current_jar"
+systemctl restart "$service"
+journalctl -u "$service" --since '5 minutes ago' --no-pager | tail -60 >&2
+echo "ВНИМАНИЕ: откат вернул код, но не схему базы. Применённые миграции остались." >&2
+echo "Схема откатывается только из дампа $backups_dir/$newest_backup_after." >&2
+exit 1
