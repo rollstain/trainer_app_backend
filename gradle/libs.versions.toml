@@ -5,7 +5,7 @@ springBoot = "3.5.4"
 springDependencyManagement = "1.1.7"
 springdoc = "2.8.9"
 flyway = "11.7.2"
-awssdk = "2.31.30"
+awssdk = "2.54.6"
 firebaseAdmin = "9.4.3"
 detekt = "1.23.6"
 
