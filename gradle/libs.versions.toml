@@ -1,6 +1,6 @@
 [versions]
 
-kotlin = "2.3.0"
+kotlin = "2.4.10"
 springBoot = "3.5.4"
 springDependencyManagement = "1.1.7"
 springdoc = "2.8.9"
