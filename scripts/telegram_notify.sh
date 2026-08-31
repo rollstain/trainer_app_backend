@@ -19,7 +19,7 @@ if [ $# -ge 2 ] && [ -s "$2" ]; then
 fi
 
 if [ "$(printf '%s' "$message" | wc -m)" -gt "$message_char_limit" ]; then
-    trimmed=$(printf '%s' "$message" | head -c "$message_char_limit" | iconv -c -f utf-8 -t utf-8)
+    trimmed=$(head -c "$message_char_limit" <<< "$message" | iconv -c -f utf-8 -t utf-8)
     message=$(printf '%s\n\n…текст обрезан, целиком — в прогоне: %s' "$trimmed" "$run_url")
 fi
 

@@ -63,7 +63,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          built_jar=$(find build/libs -name '*.jar' -not -name '*-plain.jar' | head -1)
+          built_jar=$(find build/libs -name '*.jar' -not -name '*-plain.jar' -print -quit)
           ssh -i ~/.ssh/deploy_key \
             -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 \
             "${DEPLOY_USER}@${DEPLOY_HOST}" /opt/trainer/ci_deploy.sh < "$built_jar"

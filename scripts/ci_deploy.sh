@@ -27,9 +27,13 @@ if ! unzip -l "$incoming_jar" > /dev/null 2>&1; then
     exit 1
 fi
 
-newest_backup_before=$(ls -t "$backups_dir" 2>/dev/null | head -1 || echo "")
+newest_backup() {
+    find "$backups_dir" -maxdepth 1 -type f -printf '%T@ %f\n' 2>/dev/null | sort -rn | awk 'NR == 1 { print $2 }'
+}
+
+newest_backup_before=$(newest_backup)
 "$backup_script"
-newest_backup_after=$(ls -t "$backups_dir" 2>/dev/null | head -1 || echo "")
+newest_backup_after=$(newest_backup)
 
 if [ "$newest_backup_after" = "$newest_backup_before" ]; then
     echo "дамп базы не появился в $backups_dir — выкатку не начинаю" >&2

@@ -49,7 +49,7 @@ jobs:
       - name: Имя артефакта
         id: jar
         run: |
-          built_jar=$(find build/libs -name '*.jar' -not -name '*-plain.jar' | head -1)
+          built_jar=$(find build/libs -name '*.jar' -not -name '*-plain.jar' -print -quit)
           target="trainer-backend-${{ steps.meta.outputs.version }}.jar"
           cp "$built_jar" "$target"
           echo "path=$target" >> "$GITHUB_OUTPUT"

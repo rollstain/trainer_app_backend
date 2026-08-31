@@ -31,7 +31,7 @@ total_commits=$(git log --no-merges --oneline "$range" | wc -l | tr -d ' ')
 
 {
     echo "$header"
-    git log --no-merges --pretty=format:'• %s' "$range" | head -n "$max_listed_commits"
+    git log --no-merges -n "$max_listed_commits" --pretty=format:'• %s' "$range"
     echo
     if [ "$total_commits" -gt "$max_listed_commits" ]; then
         echo "…и ещё $((total_commits - max_listed_commits)) коммитов"
