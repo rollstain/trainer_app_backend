@@ -14,7 +14,7 @@ detekt = "1.23.6"
 springdoc-openapi = { group = "org.springdoc", name = "springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
 flyway-core = { group = "org.flywaydb", name = "flyway-core", version.ref = "flyway" }
 flyway-postgresql = { group = "org.flywaydb", name = "flyway-database-postgresql", version.ref = "flyway" }
-postgresql = { group = "org.postgresql", name = "postgresql", version = "42.7.7" }
+postgresql = { group = "org.postgresql", name = "postgresql", version = "42.7.13" }
 awssdk-s3 = { group = "software.amazon.awssdk", name = "s3", version.ref = "awssdk" }
 firebase-admin = { group = "com.google.firebase", name = "firebase-admin", version.ref = "firebaseAdmin" }
 detekt-formatting = { group = "io.gitlab.arturbosch.detekt", name = "detekt-formatting", version.ref = "detekt" }
