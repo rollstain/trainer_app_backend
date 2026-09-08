@@ -16,9 +16,13 @@ fun normalizedLoginOrNull(raw: String): String? = raw.trim().lowercase().takeIf(
 fun normalizedIdentifier(raw: String): String = raw.trim().lowercase()
 
 fun requireAcceptablePassword(password: String) {
-    val acceptable = password.length >= PASSWORD_MIN_LENGTH &&
-        password.toByteArray(Charsets.UTF_8).size <= BCRYPT_MAX_PASSWORD_BYTES
-    if (!acceptable) {
+    if (password.length < PASSWORD_MIN_LENGTH) {
         throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Пароль короче $PASSWORD_MIN_LENGTH символов")
+    }
+    if (password.toByteArray(Charsets.UTF_8).size > BCRYPT_MAX_PASSWORD_BYTES) {
+        throw ResponseStatusException(
+            HttpStatus.BAD_REQUEST,
+            "Пароль не помещается в $BCRYPT_MAX_PASSWORD_BYTES байт: русская буква занимает два",
+        )
     }
 }
