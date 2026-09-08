@@ -1,7 +1,10 @@
 package app.trainer.backend.auth.external
 
+import app.trainer.backend.auth.AuthTokensResponder
 import app.trainer.backend.auth.AuthTokensResponse
 import app.trainer.backend.config.CurrentUserId
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
 import java.security.MessageDigest
 import java.util.UUID
@@ -23,6 +26,7 @@ class ExternalAuthController(
     private val externalAuthService: ExternalAuthService,
     private val telegramLoginService: TelegramLoginService,
     private val telegramProperties: TelegramProperties,
+    private val authTokensResponder: AuthTokensResponder,
 ) {
 
     @PostMapping("/auth/telegram/start")
@@ -51,8 +55,13 @@ class ExternalAuthController(
     }
 
     @PostMapping("/auth/external")
-    fun signIn(@Valid @RequestBody request: ExternalSignInRequest): AuthTokensResponse {
-        return externalAuthService.signIn(request)
+    fun signIn(
+        @Valid @RequestBody request: ExternalSignInRequest,
+        httpRequest: HttpServletRequest,
+        httpResponse: HttpServletResponse,
+    ): AuthTokensResponse {
+        val tokens = externalAuthService.signIn(request)
+        return authTokensResponder.respond(tokens = tokens, request = httpRequest, response = httpResponse)
     }
 
     @GetMapping("/me/identities")

@@ -19,9 +19,9 @@ class SessionService(
 ) {
 
     @Transactional
-    fun refresh(request: RefreshRequest): AuthTokensResponse {
+    fun refresh(refreshToken: String): AuthTokensResponse {
         val now = Instant.now(clock)
-        val incomingHash = tokenService.hash(request.refreshToken)
+        val incomingHash = tokenService.hash(refreshToken)
         val session = sessionByCurrentOrPreviousToken(incomingHash = incomingHash, now = now)
         requireLiveSession(session = session, now = now)
         return rotate(session = session, now = now)

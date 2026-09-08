@@ -2,8 +2,11 @@ package app.trainer.backend.auth
 
 import app.trainer.backend.config.CurrentSessionId
 import app.trainer.backend.config.CurrentUserId
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
 import java.util.UUID
+import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -11,12 +14,15 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.ResponseStatusException
 
 @RestController
 @RequestMapping("/auth")
 class AuthController(
     private val authService: AuthService,
     private val sessionService: SessionService,
+    private val authTokensResponder: AuthTokensResponder,
+    private val refreshTokenCookie: RefreshTokenCookie,
 ) {
 
     @PostMapping("/invites")
@@ -30,8 +36,13 @@ class AuthController(
     }
 
     @PostMapping("/invites/redeem")
-    fun redeemInvite(@Valid @RequestBody request: RedeemInviteRequest): AuthTokensResponse {
-        return authService.redeemInvite(request = request)
+    fun redeemInvite(
+        @Valid @RequestBody request: RedeemInviteRequest,
+        httpRequest: HttpServletRequest,
+        httpResponse: HttpServletResponse,
+    ): AuthTokensResponse {
+        val tokens = authService.redeemInvite(request = request)
+        return authTokensResponder.respond(tokens = tokens, request = httpRequest, response = httpResponse)
     }
 
     @GetMapping("/sessions")
@@ -43,8 +54,16 @@ class AuthController(
     }
 
     @DeleteMapping("/sessions/{sessionId}")
-    fun revokeSession(@CurrentUserId userId: UUID, @PathVariable sessionId: UUID) {
+    fun revokeSession(
+        @CurrentUserId userId: UUID,
+        @CurrentSessionId currentSessionId: UUID?,
+        @PathVariable sessionId: UUID,
+        httpResponse: HttpServletResponse,
+    ) {
         sessionService.revokeSession(userId = userId, sessionId = sessionId)
+        if (sessionId == currentSessionId) {
+            refreshTokenCookie.clear(httpResponse)
+        }
     }
 
     @PostMapping("/sessions/revoke-others")
@@ -58,7 +77,15 @@ class AuthController(
     }
 
     @PostMapping("/refresh")
-    fun refresh(@Valid @RequestBody request: RefreshRequest): AuthTokensResponse {
-        return sessionService.refresh(request = request)
+    fun refresh(
+        @RequestBody(required = false) request: RefreshRequest?,
+        httpRequest: HttpServletRequest,
+        httpResponse: HttpServletResponse,
+    ): AuthTokensResponse {
+        val refreshToken = request?.refreshToken?.takeIf { it.isNotBlank() }
+            ?: refreshTokenCookie.read(httpRequest)
+            ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Refresh-токен не передан")
+        val tokens = sessionService.refresh(refreshToken = refreshToken)
+        return authTokensResponder.respond(tokens = tokens, request = httpRequest, response = httpResponse)
     }
 }

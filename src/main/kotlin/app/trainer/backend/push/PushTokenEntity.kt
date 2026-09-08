@@ -11,7 +11,7 @@ import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.transaction.annotation.Transactional
 
-enum class PushPlatform { ANDROID, IOS }
+enum class PushPlatform { ANDROID, IOS, WEB }
 
 @Entity
 @Table(name = "push_tokens")
