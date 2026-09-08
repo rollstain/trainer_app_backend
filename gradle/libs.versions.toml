@@ -1,9 +1,9 @@
 [versions]
 
 kotlin = "2.4.10"
-springBoot = "4.1.1"
+springBoot = "3.5.4"
 springDependencyManagement = "1.1.7"
-springdoc = "3.1.0"
+springdoc = "2.8.9"
 flyway = "11.7.2"
 awssdk = "2.54.7"
 firebaseAdmin = "9.4.3"
