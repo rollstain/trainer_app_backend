@@ -4,17 +4,22 @@ import app.trainer.backend.config.WebClientProperties
 import jakarta.servlet.http.Cookie
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpHeaders
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository
 
 private const val ACCESS_TOKEN = "access-token"
 private const val REFRESH_TOKEN = "refresh-token"
 private const val WEB_ORIGIN = "https://app.lyashukfit.ru"
 private const val COOKIE_DOMAIN = "lyashukfit.ru"
+private const val CSRF_COOKIE_NAME = "XSRF-TOKEN"
+private const val EXISTING_CSRF_TOKEN = "csrf-from-previous-response"
 private val EXPIRES_AT: Instant = Instant.parse("2026-03-02T09:15:00Z")
 
 private val AUTH_PROPERTIES = AuthProperties(
@@ -45,7 +50,13 @@ class SessionCookieTransportTest {
         authProperties = AUTH_PROPERTIES,
         webClientProperties = webClientProperties,
     )
-    private val responder = AuthTokensResponder(refreshTokenCookie)
+    private val csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse().apply {
+        setCookieCustomizer { cookie -> cookie.secure(true).domain(COOKIE_DOMAIN) }
+    }
+    private val responder = AuthTokensResponder(
+        refreshTokenCookie = refreshTokenCookie,
+        csrfCookie = CsrfCookie(csrfTokenRepository),
+    )
 
     private val tokens = AuthTokensResponse(
         accessToken = ACCESS_TOKEN,
@@ -80,6 +91,45 @@ class SessionCookieTransportTest {
 
         assertEquals(REFRESH_TOKEN, body.refreshToken)
         assertNull(response.getHeader(HttpHeaders.SET_COOKIE))
+    }
+
+    @Test
+    fun `браузер получает CSRF-токен вместе с сессией, а не после первого отказа`() {
+        val request = MockHttpServletRequest()
+        request.addHeader(SESSION_TRANSPORT_HEADER, "cookie")
+        val response = MockHttpServletResponse()
+
+        responder.respond(tokens = tokens, request = request, response = response)
+
+        val csrfCookie = response.getHeaders(HttpHeaders.SET_COOKIE)
+            .singleOrNull { it.startsWith("$CSRF_COOKIE_NAME=") }
+        assertNotNull(csrfCookie)
+        assertTrue(csrfCookie.contains("Domain=$COOKIE_DOMAIN"))
+        assertFalse(csrfCookie.startsWith("$CSRF_COOKIE_NAME=;"))
+    }
+
+    @Test
+    fun `мобильному клиенту CSRF-токен не выдаётся`() {
+        val request = MockHttpServletRequest()
+        val response = MockHttpServletResponse()
+
+        responder.respond(tokens = tokens, request = request, response = response)
+
+        assertTrue(response.getHeaders(HttpHeaders.SET_COOKIE).isEmpty())
+    }
+
+    @Test
+    fun `выданный CSRF-токен переиспользуется, а не выпускается заново`() {
+        val request = MockHttpServletRequest()
+        request.addHeader(SESSION_TRANSPORT_HEADER, "cookie")
+        request.setCookies(Cookie(CSRF_COOKIE_NAME, EXISTING_CSRF_TOKEN))
+        val response = MockHttpServletResponse()
+
+        responder.respond(tokens = tokens, request = request, response = response)
+
+        val csrfCookie = response.getHeaders(HttpHeaders.SET_COOKIE)
+            .single { it.startsWith("$CSRF_COOKIE_NAME=") }
+        assertTrue(csrfCookie.startsWith("$CSRF_COOKIE_NAME=$EXISTING_CSRF_TOKEN"))
     }
 
     @Test
