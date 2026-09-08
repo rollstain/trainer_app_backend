@@ -1,5 +1,6 @@
 package app.trainer.backend.auth
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import jakarta.validation.constraints.NotBlank
 import java.time.Instant
 import java.util.UUID
@@ -28,9 +29,10 @@ data class RefreshRequest(
     val refreshToken: String,
 )
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class AuthTokensResponse(
     val accessToken: String,
-    val refreshToken: String,
+    val refreshToken: String?,
     val accessTokenExpiresAt: Instant,
 )
 

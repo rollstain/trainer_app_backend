@@ -14,7 +14,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
 import org.springframework.stereotype.Service
 
-private const val REFRESH_TOKEN_BYTES = 32
+private const val OPAQUE_TOKEN_BYTES = 32
 
 const val SESSION_ID_CLAIM = "sid"
 
@@ -41,8 +41,10 @@ class TokenService(
         return AccessToken(value = token, expiresAt = expiresAt)
     }
 
-    fun generateRefreshToken(): String {
-        val bytes = ByteArray(REFRESH_TOKEN_BYTES)
+    fun generateRefreshToken(): String = generateOpaqueToken()
+
+    fun generateOpaqueToken(): String {
+        val bytes = ByteArray(OPAQUE_TOKEN_BYTES)
         random.nextBytes(bytes)
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
     }

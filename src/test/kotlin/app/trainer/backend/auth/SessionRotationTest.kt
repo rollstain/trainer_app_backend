@@ -65,7 +65,7 @@ class SessionRotationTest {
         val service = serviceAt(NOW)
         givenCurrentToken(FIRST_TOKEN, session)
 
-        service.refresh(RefreshRequest(refreshToken = FIRST_TOKEN))
+        service.refresh(refreshToken = FIRST_TOKEN)
 
         assertEquals("hash-of-rotated", session.refreshTokenHash)
         assertEquals("hash-of-$FIRST_TOKEN", session.previousRefreshTokenHash)
@@ -82,7 +82,7 @@ class SessionRotationTest {
         val service = serviceAt(NOW)
         givenPreviousToken(FIRST_TOKEN, session)
 
-        val tokens = service.refresh(RefreshRequest(refreshToken = FIRST_TOKEN))
+        val tokens = service.refresh(refreshToken = FIRST_TOKEN)
 
         assertNotNull(tokens.refreshToken, "повтор в пределах окна выдаёт рабочую пару")
         assertEquals("hash-of-$FIRST_TOKEN", session.previousRefreshTokenHash, "окно не сдвигается")
@@ -99,7 +99,7 @@ class SessionRotationTest {
         givenPreviousToken(FIRST_TOKEN, session)
 
         val failure = assertFailsWith<ResponseStatusException> {
-            service.refresh(RefreshRequest(refreshToken = FIRST_TOKEN))
+            service.refresh(refreshToken = FIRST_TOKEN)
         }
 
         assertEquals(HttpStatus.UNAUTHORIZED, failure.statusCode)
@@ -114,7 +114,7 @@ class SessionRotationTest {
         `when`(sessionRepository.findByPreviousRefreshTokenHash(anyNonNull())).thenReturn(null)
 
         val failure = assertFailsWith<ResponseStatusException> {
-            service.refresh(RefreshRequest(refreshToken = FIRST_TOKEN))
+            service.refresh(refreshToken = FIRST_TOKEN)
         }
 
         assertEquals(HttpStatus.UNAUTHORIZED, failure.statusCode)
@@ -127,7 +127,7 @@ class SessionRotationTest {
         givenCurrentToken(FIRST_TOKEN, session)
 
         val failure = assertFailsWith<ResponseStatusException> {
-            service.refresh(RefreshRequest(refreshToken = FIRST_TOKEN))
+            service.refresh(refreshToken = FIRST_TOKEN)
         }
 
         assertEquals(HttpStatus.UNAUTHORIZED, failure.statusCode)
@@ -143,7 +143,7 @@ class SessionRotationTest {
         val service = serviceAt(NOW)
         givenCurrentToken(FIRST_TOKEN, session)
 
-        service.refresh(RefreshRequest(refreshToken = FIRST_TOKEN))
+        service.refresh(refreshToken = FIRST_TOKEN)
 
         assertNull(session.revokedAt, "активная сессия не истекает по сроку от создания")
         assertEquals(NOW, session.lastSeenAt)
@@ -159,7 +159,7 @@ class SessionRotationTest {
         givenCurrentToken(FIRST_TOKEN, session)
 
         val failure = assertFailsWith<ResponseStatusException> {
-            service.refresh(RefreshRequest(refreshToken = FIRST_TOKEN))
+            service.refresh(refreshToken = FIRST_TOKEN)
         }
 
         assertEquals(HttpStatus.UNAUTHORIZED, failure.statusCode)
