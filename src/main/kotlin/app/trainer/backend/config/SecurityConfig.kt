@@ -10,6 +10,7 @@ import app.trainer.backend.link.InviteLinkProperties
 import app.trainer.backend.mail.MailProperties
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import jakarta.servlet.http.HttpServletRequest
+import java.time.Duration
 import javax.crypto.spec.SecretKeySpec
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -83,11 +84,12 @@ class SecurityConfig(
     fun securityFilterChain(
         http: HttpSecurity,
         corsConfigurationSource: CorsConfigurationSource,
+        csrfTokenRepository: CookieCsrfTokenRepository,
     ): SecurityFilterChain {
         return http
             .cors { it.configurationSource(corsConfigurationSource) }
             .csrf { csrf ->
-                csrf.csrfTokenRepository(csrfTokenRepository())
+                csrf.csrfTokenRepository(csrfTokenRepository)
                 csrf.csrfTokenRequestHandler(CsrfTokenRequestAttributeHandler())
                 csrf.requireCsrfProtectionMatcher(CookieAuthenticatedRequestMatcher())
             }
@@ -137,11 +139,14 @@ class SecurityConfig(
         }
     }
 
-    private fun csrfTokenRepository(): CookieCsrfTokenRepository {
+    @Bean
+    fun csrfTokenRepository(): CookieCsrfTokenRepository {
         val repository = CookieCsrfTokenRepository.withHttpOnlyFalse()
+        val livesAsLongAsSession = Duration.ofDays(properties.refreshTokenIdleDays)
         repository.setCookieCustomizer { cookie ->
             cookie.secure(webClientProperties.cookieSecure)
             cookie.sameSite(CROSS_SITE_REQUESTS_FORBIDDEN)
+            cookie.maxAge(livesAsLongAsSession)
             if (webClientProperties.cookieDomain.isNotBlank()) {
                 cookie.domain(webClientProperties.cookieDomain)
             }

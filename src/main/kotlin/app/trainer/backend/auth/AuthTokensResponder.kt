@@ -9,7 +9,10 @@ const val SESSION_TRANSPORT_HEADER = "X-Session-Transport"
 private const val COOKIE_TRANSPORT = "cookie"
 
 @Component
-class AuthTokensResponder(private val refreshTokenCookie: RefreshTokenCookie) {
+class AuthTokensResponder(
+    private val refreshTokenCookie: RefreshTokenCookie,
+    private val csrfCookie: CsrfCookie,
+) {
 
     fun respond(
         tokens: AuthTokensResponse,
@@ -19,6 +22,7 @@ class AuthTokensResponder(private val refreshTokenCookie: RefreshTokenCookie) {
         if (!cookieTransportRequested(request)) return tokens
         val refreshToken = checkNotNull(tokens.refreshToken) { "Сессия открыта без refresh-токена" }
         refreshTokenCookie.write(response = response, refreshToken = refreshToken)
+        csrfCookie.write(request = request, response = response)
         return tokens.copy(refreshToken = null)
     }
 
