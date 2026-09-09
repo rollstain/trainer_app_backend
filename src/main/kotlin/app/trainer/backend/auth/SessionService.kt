@@ -56,9 +56,11 @@ class SessionService(
     private fun rotate(session: DeviceSessionEntity, now: Instant): AuthTokensResponse {
         val refreshToken = tokenService.generateRefreshToken()
         val replacedHash = session.refreshTokenHash
+        val graceStillOpen = withinGrace(session.rotatedAt, now)
         session.refreshTokenHash = tokenService.hash(refreshToken)
-        session.previousRefreshTokenHash = session.previousRefreshTokenHash ?: replacedHash
-        session.rotatedAt = session.rotatedAt.takeIf { withinGrace(it, now) } ?: now
+        session.previousRefreshTokenHash =
+            if (graceStillOpen) session.previousRefreshTokenHash else replacedHash
+        session.rotatedAt = if (graceStillOpen) session.rotatedAt else now
         session.lastSeenAt = now
 
         val accessToken = tokenService.issueAccessToken(userId = session.userId, sessionId = session.id)
