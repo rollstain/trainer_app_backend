@@ -11,6 +11,7 @@ private const val CODE = "CVSKQJ"
 private const val PACKAGE = "app.trainer.android"
 private const val FINGERPRINT = "AA:BB:CC"
 private const val DOWNLOAD_URL = "https://example.org/app"
+private const val WEB_BASE_URL = "https://web.example.org"
 
 class InviteLinkControllerTest {
 
@@ -22,6 +23,7 @@ class InviteLinkControllerTest {
             androidPackage = androidPackage,
             androidSha256 = androidSha256,
             appDownloadUrl = DOWNLOAD_URL,
+            webBaseUrl = WEB_BASE_URL,
         )
     )
 
@@ -32,6 +34,17 @@ class InviteLinkControllerTest {
         assertTrue(page.contains(CODE), "код виден человеку")
         assertTrue(page.contains("trainer://invite/$CODE"), "ссылка открывает приложение")
         assertTrue(page.contains(DOWNLOAD_URL), "есть куда пойти без приложения")
+    }
+
+    @Test
+    fun `the page leads to the web client, not to the app scheme`() {
+        val page = controller().invitePage(CODE)
+
+        assertTrue(page.contains("$WEB_BASE_URL/i/$CODE"), "веб-клиент открывает приглашение")
+        assertTrue(
+            page.contains("""window.location.href = "$WEB_BASE_URL/i/$CODE""""),
+            "на айфоне схема trainer:// не обработана ничем, поэтому уводим в браузер",
+        )
     }
 
     @Test
