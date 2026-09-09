@@ -32,6 +32,7 @@ private const val RESEND_SECONDS = 120L
 private const val CONFIRM_TTL_HOURS = 72L
 private const val INVITE_TTL_HOURS = 72L
 private const val FIRST_TOKEN = "first-refresh-token"
+private const val OLDER_TOKEN = "older-refresh-token"
 private const val DEVICE = "Pixel 8"
 
 @Suppress("UNCHECKED_CAST")
@@ -201,6 +202,25 @@ class SessionRotationTest {
         }
 
         assertEquals(HttpStatus.NOT_FOUND, failure.statusCode)
+    }
+
+    @Test
+    fun `a rotation past the window remembers the token it just replaced`() {
+        val session = session(
+            previousHash = "hash-of-$OLDER_TOKEN",
+            rotatedAt = NOW.minusSeconds(GRACE_SECONDS * 2),
+        )
+        val service = serviceAt(NOW)
+        givenCurrentToken(FIRST_TOKEN, session)
+
+        service.refresh(refreshToken = FIRST_TOKEN)
+
+        assertEquals(
+            "hash-of-$FIRST_TOKEN",
+            session.previousRefreshTokenHash,
+            "окно прикрывает последний обмен, а не самый первый",
+        )
+        assertEquals(NOW, session.rotatedAt)
     }
 
     private fun givenCurrentToken(token: String, session: DeviceSessionEntity) {
