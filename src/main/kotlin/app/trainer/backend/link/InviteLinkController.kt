@@ -18,6 +18,7 @@ data class InviteLinkProperties(
     val androidPackage: String,
     val androidSha256: String,
     val appDownloadUrl: String,
+    val webBaseUrl: String,
 )
 
 @RestController
@@ -29,7 +30,11 @@ class InviteLinkController(private val properties: InviteLinkProperties) {
         if (safeCode.length != CODE_LENGTH) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Приглашение не найдено")
         }
-        return invitePageHtml(code = safeCode, downloadUrl = properties.appDownloadUrl)
+        return invitePageHtml(
+            code = safeCode,
+            webBaseUrl = properties.webBaseUrl,
+            downloadUrl = properties.appDownloadUrl,
+        )
     }
 
     @GetMapping("/.well-known/assetlinks.json", produces = [MediaType.APPLICATION_JSON_VALUE])
@@ -62,36 +67,14 @@ data class AssetLinkTarget(
     val sha256CertFingerprints: List<String>,
 )
 
-private fun invitePageHtml(code: String, downloadUrl: String): String = """
-<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Приглашение от тренера</title>
-<style>
-body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 32px 20px;
-       background: #f5f5f4; color: #1c1917; display: flex; justify-content: center; }
-main { max-width: 420px; width: 100%; }
-h1 { font-size: 24px; margin: 0 0 8px; }
-p { color: #57534e; line-height: 1.5; margin: 0 0 24px; }
-.code { font-family: ui-monospace, monospace; font-size: 32px; letter-spacing: 6px;
-        background: #fff; border-radius: 12px; padding: 16px; text-align: center; margin-bottom: 24px; }
-a.button { display: block; text-align: center; text-decoration: none; border-radius: 12px;
-           padding: 16px; font-weight: 600; margin-bottom: 12px; }
-a.primary { background: #2f4fea; color: #fff; }
-a.secondary { background: #fff; color: #1c1917; }
-</style>
-</head>
-<body>
-<main>
-<h1>Вас пригласил тренер</h1>
-<p>Откройте приложение — код подставится сам. Если приложения ещё нет, сначала установите его.</p>
-<div class="code">$code</div>
-<a class="button primary" href="$DEEP_LINK_PREFIX$code">Открыть приложение</a>
-<a class="button secondary" href="$downloadUrl">Установить приложение</a>
-</main>
-<script>window.location.href = "$DEEP_LINK_PREFIX$code";</script>
-</body>
-</html>
-""".trimIndent()
+private fun invitePageHtml(code: String, webBaseUrl: String, downloadUrl: String): String =
+    linkPageHtml(
+        title = "Приглашение от тренера",
+        heading = "Вас пригласил тренер",
+        explanation = "Продолжите в браузере — код подставится сам. " +
+            "На Android можно открыть приложение, если оно установлено.",
+        webUrl = "$webBaseUrl/i/$code",
+        appUrl = "$DEEP_LINK_PREFIX$code",
+        downloadUrl = downloadUrl,
+        highlight = code,
+    )

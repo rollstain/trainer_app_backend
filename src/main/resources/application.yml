@@ -93,6 +93,7 @@ trainer:
     android-package: ${ANDROID_PACKAGE:app.trainer.android}
     android-sha256: ${ANDROID_SHA256:}
     app-download-url: ${APP_DOWNLOAD_URL:https://api.lyashukfit.ru/i/download}
+    web-base-url: ${WEB_BASE_URL:https://app.lyashukfit.ru}
   push:
     credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
   media:
