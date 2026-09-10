@@ -223,6 +223,43 @@ class SessionRotationTest {
         assertEquals(NOW, session.rotatedAt)
     }
 
+    @Test
+    fun `a rotation inside the window also remembers the token it just replaced`() {
+        val session = session(
+            previousHash = "hash-of-$OLDER_TOKEN",
+            rotatedAt = NOW.minusSeconds(GRACE_SECONDS / 2),
+        )
+        val service = serviceAt(NOW)
+        givenCurrentToken(FIRST_TOKEN, session)
+
+        service.refresh(refreshToken = FIRST_TOKEN)
+
+        assertEquals(
+            "hash-of-$FIRST_TOKEN",
+            session.previousRefreshTokenHash,
+            "иначе только что выданный токен перестаёт узнаваться со следующим обменом",
+        )
+        assertEquals(NOW, session.rotatedAt, "окно отсчитывается от последнего обмена")
+    }
+
+    @Test
+    fun `two exchanges in a row keep the client from losing its session`() {
+        val session = session(previousHash = null, rotatedAt = null)
+        givenCurrentToken(FIRST_TOKEN, session)
+        serviceAt(NOW).refresh(refreshToken = FIRST_TOKEN)
+
+        val handedOut = session.refreshTokenHash
+        `when`(sessionRepository.findByRefreshTokenHash(handedOut)).thenReturn(session)
+        `when`(tokenService.hash("rotated")).thenReturn(handedOut)
+        serviceAt(NOW.plusSeconds(6)).refresh(refreshToken = "rotated")
+
+        assertEquals(
+            handedOut,
+            session.previousRefreshTokenHash,
+            "клиент предъявит именно этот токен, если ответ на второй обмен до него не дошёл",
+        )
+    }
+
     private fun givenCurrentToken(token: String, session: DeviceSessionEntity) {
         `when`(tokenService.hash(token)).thenReturn("hash-of-$token")
         `when`(sessionRepository.findByRefreshTokenHash("hash-of-$token")).thenReturn(session)
