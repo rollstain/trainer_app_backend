@@ -33,8 +33,7 @@ class SessionService(
 
         val rotated = deviceSessionRepository.findByPreviousRefreshTokenHash(incomingHash)
             ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Сессия не найдена")
-        val graceEndsAt = rotated.rotatedAt?.plusSeconds(properties.refreshRotationGraceSeconds)
-        if (graceEndsAt == null || graceEndsAt.isBefore(now)) {
+        if (!withinGrace(rotated.rotatedAt, now)) {
             revokeChain(session = rotated, now = now)
             throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Сессия отозвана")
         }
@@ -55,12 +54,9 @@ class SessionService(
 
     private fun rotate(session: DeviceSessionEntity, now: Instant): AuthTokensResponse {
         val refreshToken = tokenService.generateRefreshToken()
-        val replacedHash = session.refreshTokenHash
-        val graceStillOpen = withinGrace(session.rotatedAt, now)
+        session.previousRefreshTokenHash = session.refreshTokenHash
         session.refreshTokenHash = tokenService.hash(refreshToken)
-        session.previousRefreshTokenHash =
-            if (graceStillOpen) session.previousRefreshTokenHash else replacedHash
-        session.rotatedAt = if (graceStillOpen) session.rotatedAt else now
+        session.rotatedAt = now
         session.lastSeenAt = now
 
         val accessToken = tokenService.issueAccessToken(userId = session.userId, sessionId = session.id)
