@@ -28,10 +28,10 @@ class SessionService(
     }
 
     private fun sessionByCurrentOrPreviousToken(incomingHash: String, now: Instant): DeviceSessionEntity {
-        val current = deviceSessionRepository.findByRefreshTokenHash(incomingHash)
+        val current = deviceSessionRepository.findWithLockByRefreshTokenHash(incomingHash)
         if (current != null) return current
 
-        val rotated = deviceSessionRepository.findByPreviousRefreshTokenHash(incomingHash)
+        val rotated = deviceSessionRepository.findWithLockByPreviousRefreshTokenHash(incomingHash)
             ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Сессия не найдена")
         if (!withinGrace(rotated.rotatedAt, now)) {
             revokeChain(session = rotated, now = now)

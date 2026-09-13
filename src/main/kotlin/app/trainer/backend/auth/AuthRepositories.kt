@@ -1,7 +1,9 @@
 package app.trainer.backend.auth
 
+import jakarta.persistence.LockModeType
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
 
 interface InviteRepository : JpaRepository<InviteEntity, UUID> {
 
@@ -12,9 +14,11 @@ interface InviteRepository : JpaRepository<InviteEntity, UUID> {
 
 interface DeviceSessionRepository : JpaRepository<DeviceSessionEntity, UUID> {
 
-    fun findByRefreshTokenHash(refreshTokenHash: String): DeviceSessionEntity?
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findWithLockByRefreshTokenHash(refreshTokenHash: String): DeviceSessionEntity?
 
-    fun findByPreviousRefreshTokenHash(previousRefreshTokenHash: String): DeviceSessionEntity?
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findWithLockByPreviousRefreshTokenHash(previousRefreshTokenHash: String): DeviceSessionEntity?
 
     fun findByUserIdAndRevokedAtIsNullOrderByLastSeenAtDesc(userId: UUID): List<DeviceSessionEntity>
 

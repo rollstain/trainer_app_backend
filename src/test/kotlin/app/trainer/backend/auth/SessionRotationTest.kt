@@ -111,8 +111,8 @@ class SessionRotationTest {
     fun `an unknown token belongs to nobody`() {
         val service = serviceAt(NOW)
         `when`(tokenService.hash(FIRST_TOKEN)).thenReturn("hash-of-$FIRST_TOKEN")
-        `when`(sessionRepository.findByRefreshTokenHash(anyNonNull())).thenReturn(null)
-        `when`(sessionRepository.findByPreviousRefreshTokenHash(anyNonNull())).thenReturn(null)
+        `when`(sessionRepository.findWithLockByRefreshTokenHash(anyNonNull())).thenReturn(null)
+        `when`(sessionRepository.findWithLockByPreviousRefreshTokenHash(anyNonNull())).thenReturn(null)
 
         val failure = assertFailsWith<ResponseStatusException> {
             service.refresh(refreshToken = FIRST_TOKEN)
@@ -249,7 +249,7 @@ class SessionRotationTest {
         serviceAt(NOW).refresh(refreshToken = FIRST_TOKEN)
 
         val handedOut = session.refreshTokenHash
-        `when`(sessionRepository.findByRefreshTokenHash(handedOut)).thenReturn(session)
+        `when`(sessionRepository.findWithLockByRefreshTokenHash(handedOut)).thenReturn(session)
         `when`(tokenService.hash("rotated")).thenReturn(handedOut)
         serviceAt(NOW.plusSeconds(6)).refresh(refreshToken = "rotated")
 
@@ -262,13 +262,13 @@ class SessionRotationTest {
 
     private fun givenCurrentToken(token: String, session: DeviceSessionEntity) {
         `when`(tokenService.hash(token)).thenReturn("hash-of-$token")
-        `when`(sessionRepository.findByRefreshTokenHash("hash-of-$token")).thenReturn(session)
+        `when`(sessionRepository.findWithLockByRefreshTokenHash("hash-of-$token")).thenReturn(session)
     }
 
     private fun givenPreviousToken(token: String, session: DeviceSessionEntity) {
         `when`(tokenService.hash(token)).thenReturn("hash-of-$token")
-        `when`(sessionRepository.findByRefreshTokenHash("hash-of-$token")).thenReturn(null)
-        `when`(sessionRepository.findByPreviousRefreshTokenHash("hash-of-$token")).thenReturn(session)
+        `when`(sessionRepository.findWithLockByRefreshTokenHash("hash-of-$token")).thenReturn(null)
+        `when`(sessionRepository.findWithLockByPreviousRefreshTokenHash("hash-of-$token")).thenReturn(session)
     }
 
     private fun serviceAt(now: Instant): SessionService {
