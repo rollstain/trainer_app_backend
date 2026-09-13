@@ -27,6 +27,7 @@ data class CoachSummaryResponse(
     val zoneId: String,
     val cancellationWindowHours: Int,
     val workingHours: List<WorkingDayDto>,
+    val linkedAt: Instant,
 )
 
 data class WorkingDayDto(
