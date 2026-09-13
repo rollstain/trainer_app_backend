@@ -174,6 +174,7 @@ class CoachService(
                     zoneId = coach.zoneId,
                     cancellationWindowHours = coach.cancellationWindowHours,
                     workingHours = workingHoursOf(coach.id),
+                    linkedAt = link.createdAt,
                 )
             }
     }
