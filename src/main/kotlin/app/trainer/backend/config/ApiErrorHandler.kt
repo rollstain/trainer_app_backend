@@ -1,8 +1,12 @@
 package app.trainer.backend.config
 
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.responses.ApiResponse
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.bind.MethodArgumentNotValidException
@@ -13,6 +17,9 @@ import org.springframework.web.server.ResponseStatusException
 private const val UNEXPECTED_FAILURE_MESSAGE = "Что-то пошло не так, попробуйте позже"
 private const val VALIDATION_FAILURE_MESSAGE = "Проверьте заполненные поля"
 private const val MALFORMED_BODY_MESSAGE = "Некорректное тело запроса"
+private const val ANY_OTHER_RESPONSE = "default"
+private const val ERROR_ENVELOPE_DESCRIPTION =
+    "Ошибка из обработчика приложения; отказы фильтров безопасности (401, 403) приходят без тела"
 
 data class ApiErrorResponse(
     val status: Int,
@@ -26,6 +33,16 @@ class ApiErrorHandler {
 
     private val logger = LoggerFactory.getLogger(ApiErrorHandler::class.java)
 
+    @ApiResponse(
+        responseCode = ANY_OTHER_RESPONSE,
+        description = ERROR_ENVELOPE_DESCRIPTION,
+        content = [
+            Content(
+                mediaType = MediaType.APPLICATION_JSON_VALUE,
+                schema = Schema(implementation = ApiErrorResponse::class),
+            ),
+        ],
+    )
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatus(failure: ResponseStatusException): ResponseEntity<ApiErrorResponse> {
         val status = HttpStatus.valueOf(failure.statusCode.value())
