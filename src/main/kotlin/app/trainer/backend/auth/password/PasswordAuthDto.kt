@@ -1,9 +1,13 @@
 package app.trainer.backend.auth.password
 
+import app.trainer.backend.user.DISPLAY_NAME_MAX_LENGTH
+import app.trainer.backend.user.DISPLAY_NAME_TOO_LONG
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 
 data class PasswordSignUpRequest(
     @field:NotBlank
+    @field:Size(max = DISPLAY_NAME_MAX_LENGTH, message = DISPLAY_NAME_TOO_LONG)
     val displayName: String,
     @field:NotBlank
     val email: String,
