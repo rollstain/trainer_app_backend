@@ -9,6 +9,7 @@ import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.coach.CoachSignUpService
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
+import jakarta.validation.constraints.Size
 import java.time.Instant
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
@@ -37,6 +38,7 @@ data class MeResponse(
 )
 
 data class BecomeCoachRequest(
+    @field:Size(max = DISPLAY_NAME_MAX_LENGTH, message = DISPLAY_NAME_TOO_LONG)
     val displayName: String,
     val zoneId: String,
 )
