@@ -107,6 +107,9 @@ data class ClientProgramResponse(
     val programId: UUID,
     val programTitle: String,
     val startsOn: LocalDate,
+    val weeksCount: Int,
+    val currentWeekNumber: Int?,
+    val todayDayTitle: String?,
 )
 
 data class ClientProgramStateResponse(val program: ClientProgramResponse?)

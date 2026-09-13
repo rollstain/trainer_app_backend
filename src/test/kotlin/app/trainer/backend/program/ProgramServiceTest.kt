@@ -57,7 +57,9 @@ class ProgramServiceTest {
     private val coachRepository = mock(CoachRepository::class.java)
     private val coachClientRepository = mock(CoachClientRepository::class.java)
 
-    private val service = ProgramService(
+    private val service = serviceAt(NOW)
+
+    private fun serviceAt(now: Instant) = ProgramService(
         programRepository = programRepository,
         dayRepository = dayRepository,
         exerciseLineRepository = exerciseLineRepository,
@@ -65,8 +67,54 @@ class ProgramServiceTest {
         exerciseRepository = exerciseRepository,
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
-        clock = Clock.fixed(NOW, ZoneOffset.UTC),
+        clock = Clock.fixed(now, ZoneOffset.UTC),
     )
+
+    @Test
+    fun `the coach sees which week of the program the client is on and what today holds`() {
+        givenCoach()
+        givenActiveClient()
+        givenAssignedProgram()
+
+        val program = serviceAt(NOW.plusSeconds(SECONDS_IN_A_WEEK)).clientProgram(
+            coachUserId = COACH_USER_ID,
+            clientUserId = CLIENT_USER_ID,
+        )
+
+        assertEquals(WEEKS_IN_PROGRAM, program?.weeksCount)
+        assertEquals(WEEKS_IN_PROGRAM, program?.currentWeekNumber)
+        assertEquals("День ног", program?.todayDayTitle)
+    }
+
+    @Test
+    fun `today is counted in the coach's time zone, not the server's`() {
+        givenCoach()
+        givenActiveClient()
+        givenAssignedProgram()
+
+        val program = serviceAt(SUNDAY_NIGHT_UTC_MONDAY_IN_MOSCOW).clientProgram(
+            coachUserId = COACH_USER_ID,
+            clientUserId = CLIENT_USER_ID,
+        )
+
+        assertEquals(1, program?.currentWeekNumber)
+        assertEquals("День ног", program?.todayDayTitle)
+    }
+
+    @Test
+    fun `before the start there is no current week and nothing for today`() {
+        givenCoach()
+        givenActiveClient()
+        givenAssignedProgram()
+
+        val program = serviceAt(NOW.minusSeconds(SECONDS_IN_A_WEEK)).clientProgram(
+            coachUserId = COACH_USER_ID,
+            clientUserId = CLIENT_USER_ID,
+        )
+
+        assertNull(program?.currentWeekNumber)
+        assertNull(program?.todayDayTitle)
+    }
 
     @Test
     fun `the planned workout lands on the weekday it was written for`() {
@@ -286,19 +334,19 @@ class ProgramServiceTest {
     }
 
     private fun givenCoach() {
-        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(
-            CoachEntity(
-                id = COACH_ID,
-                userId = COACH_USER_ID,
-                zoneId = "Europe/Moscow",
-                cancellationWindowHours = CANCELLATION_WINDOW_HOURS,
-                reminderHour = REMINDER_HOUR,
-                sessionRemindersEnabled = true,
-                diaryRemindersEnabled = true,
-                checkInRemindersEnabled = true,
-                createdAt = NOW,
-            )
+        val coach = CoachEntity(
+            id = COACH_ID,
+            userId = COACH_USER_ID,
+            zoneId = "Europe/Moscow",
+            cancellationWindowHours = CANCELLATION_WINDOW_HOURS,
+            reminderHour = REMINDER_HOUR,
+            sessionRemindersEnabled = true,
+            diaryRemindersEnabled = true,
+            checkInRemindersEnabled = true,
+            createdAt = NOW,
         )
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach)
+        `when`(coachRepository.findById(COACH_ID)).thenReturn(Optional.of(coach))
     }
 
     private fun givenActiveClient() {
@@ -389,6 +437,8 @@ class ProgramServiceTest {
 
     private companion object {
         const val DAYS_IN_A_WEEK = 7L
+        const val SECONDS_IN_A_WEEK = 604_800L
+        val SUNDAY_NIGHT_UTC_MONDAY_IN_MOSCOW: Instant = Instant.parse("2026-03-01T22:00:00Z")
         val FIRST_WEEK_DAY_ID: UUID = UUID.fromString("10000000-0000-0000-0000-00000000000a")
         val SECOND_WEEK_DAY_ID: UUID = UUID.fromString("10000000-0000-0000-0000-00000000000b")
     }
