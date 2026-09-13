@@ -16,6 +16,7 @@ import app.trainer.backend.traininglog.ExerciseRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
@@ -207,11 +208,7 @@ class ProgramService(
             endedAt = null,
         )
         assignmentRepository.save(assignment)
-        return ClientProgramResponse(
-            programId = program.id,
-            programTitle = program.title,
-            startsOn = assignment.startsOn,
-        )
+        return clientProgramResponseOf(program = program, assignment = assignment, coachZone = ZoneId.of(coach.zoneId))
     }
 
     @Transactional
@@ -278,20 +275,43 @@ class ProgramService(
         days: List<ProgramDayEntity>,
         date: LocalDate,
     ): ProgramDayEntity? {
+        val weekNumber = weekNumberOn(program = program, assignment = assignment, date = date) ?: return null
+        return days.firstOrNull { it.weekNumber == weekNumber && it.dayOfWeek == date.dayOfWeek.value }
+    }
+
+    private fun weekNumberOn(
+        program: TrainingProgramEntity,
+        assignment: ProgramAssignmentEntity,
+        date: LocalDate,
+    ): Int? {
         val daysSinceStart = ChronoUnit.DAYS.between(assignment.startsOn, date)
         if (daysSinceStart < 0) return null
-        val weekNumber = ((daysSinceStart / DAYS_IN_WEEK) % program.weeksCount).toInt() + 1
-        return days.firstOrNull { it.weekNumber == weekNumber && it.dayOfWeek == date.dayOfWeek.value }
+        return ((daysSinceStart / DAYS_IN_WEEK) % program.weeksCount).toInt() + 1
     }
 
     private fun activeProgramOf(clientUserId: UUID): ClientProgramResponse? {
         val assignment = assignmentRepository.findByClientUserIdAndEndedAtIsNull(clientUserId) ?: return null
         val program = programRepository.findByIdOrNull(assignment.programId) ?: return null
         if (program.archivedAt != null) return null
+        val coach = coachRepository.findByIdOrNull(assignment.coachId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
+        return clientProgramResponseOf(program = program, assignment = assignment, coachZone = ZoneId.of(coach.zoneId))
+    }
+
+    private fun clientProgramResponseOf(
+        program: TrainingProgramEntity,
+        assignment: ProgramAssignmentEntity,
+        coachZone: ZoneId,
+    ): ClientProgramResponse {
+        val today = LocalDate.now(clock.withZone(coachZone))
+        val days = dayRepository.findByProgramIdOrderByWeekNumberAscDayOfWeekAsc(program.id)
         return ClientProgramResponse(
             programId = program.id,
             programTitle = program.title,
             startsOn = assignment.startsOn,
+            weeksCount = program.weeksCount,
+            currentWeekNumber = weekNumberOn(program = program, assignment = assignment, date = today),
+            todayDayTitle = dayFor(program = program, assignment = assignment, days = days, date = today)?.title,
         )
     }
 
