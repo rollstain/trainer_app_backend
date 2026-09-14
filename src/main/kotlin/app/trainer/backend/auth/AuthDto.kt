@@ -1,7 +1,10 @@
 package app.trainer.backend.auth
 
+import app.trainer.backend.user.DISPLAY_NAME_MAX_LENGTH
+import app.trainer.backend.user.DISPLAY_NAME_TOO_LONG
 import com.fasterxml.jackson.annotation.JsonInclude
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import java.time.Instant
 import java.util.UUID
 
@@ -19,6 +22,7 @@ data class InvitePreviewResponse(
 data class RedeemInviteRequest(
     @field:NotBlank
     val code: String,
+    @field:Size(max = DISPLAY_NAME_MAX_LENGTH, message = DISPLAY_NAME_TOO_LONG)
     val displayName: String?,
     @field:NotBlank
     val deviceInfo: String,

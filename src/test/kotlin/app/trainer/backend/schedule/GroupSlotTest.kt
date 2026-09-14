@@ -5,7 +5,9 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
@@ -18,6 +20,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
@@ -34,7 +37,9 @@ private val SECOND_CLIENT: UUID = UUID.fromString("90000000-0000-0000-0000-00000
 private val THIRD_CLIENT: UUID = UUID.fromString("90000000-0000-0000-0000-000000000006")
 private val NOW: Instant = Instant.parse("2026-03-02T09:00:00Z")
 private val SLOT_STARTS_AT: Instant = Instant.parse("2026-03-03T09:00:00Z")
+private const val SLOT_STARTS_AT_IN_COACH_ZONE = "03.03 12:00"
 private const val SLOT_DURATION_MINUTES = 60
+private const val SECONDS_IN_HOUR = 3600L
 private const val GROUP_SEATS = 2
 private const val SINGLE_SEAT = 1
 private const val CANCELLATION_WINDOW_HOURS = 12
@@ -42,6 +47,9 @@ private const val REMINDER_HOUR = 10
 
 @Suppress("UNCHECKED_CAST")
 private fun <T> anyNonNull(): T = ArgumentMatchers.any<T>() ?: (null as T)
+
+@Suppress("UNCHECKED_CAST")
+private fun <T> capturedBy(captor: ArgumentCaptor<*>): T = captor.capture() as T
 
 class GroupSlotTest {
 
@@ -148,7 +156,7 @@ class GroupSlotTest {
                 slotId = SLOT_ID,
                 body = SlotChangeRequestBody(
                     kind = SlotChangeKind.RESCHEDULE,
-                    proposedStartsAt = SLOT_STARTS_AT.plusSeconds(3600),
+                    proposedStartsAt = SLOT_STARTS_AT.plusSeconds(SECONDS_IN_HOUR),
                 ),
             )
         }
@@ -213,6 +221,56 @@ class GroupSlotTest {
     }
 
     @Test
+    fun `cancelling a session tells everyone who signed up when it was`() {
+        val slot = slot(capacity = GROUP_SEATS)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT, SECOND_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        val recipients = ArgumentCaptor.forClass(Collection::class.java)
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+
+        service.cancelSlot(coachUserId = COACH_USER_ID, slotId = SLOT_ID)
+
+        verify(pushSender).send(capturedBy(recipients), capturedBy(message))
+        assertEquals(listOf(FIRST_CLIENT, SECOND_CLIENT), recipients.value.toList())
+        assertEquals(PushText.SLOT_CANCELLED, message.value.text)
+        assertEquals(listOf(SLOT_STARTS_AT_IN_COACH_ZONE), message.value.args, "время в поясе тренера")
+        assertEquals(mapOf("slotId" to SLOT_ID.toString()), message.value.data)
+    }
+
+    @Test
+    fun `an empty session is cancelled without a push`() {
+        val slot = slot(capacity = GROUP_SEATS)
+        givenSlot(slot, takenBy = emptyList())
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+
+        service.cancelSlot(coachUserId = COACH_USER_ID, slotId = SLOT_ID)
+
+        verify(pushSender, never()).send(anyNonNull(), anyNonNull())
+    }
+
+    @Test
+    fun `a session cancelled again is not announced again`() {
+        val slot = slot(capacity = GROUP_SEATS, lifecycle = SlotLifecycle.CANCELLED)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+
+        service.cancelSlot(coachUserId = COACH_USER_ID, slotId = SLOT_ID)
+
+        verify(pushSender, never()).send(anyNonNull(), anyNonNull())
+    }
+
+    @Test
+    fun `a session that has already started is cancelled quietly`() {
+        val slot = slot(capacity = GROUP_SEATS, startsAt = NOW.minusSeconds(SECONDS_IN_HOUR))
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+
+        service.cancelSlot(coachUserId = COACH_USER_ID, slotId = SLOT_ID)
+
+        verify(pushSender, never()).send(anyNonNull(), anyNonNull())
+    }
+
+    @Test
     fun `the coach sees who signed up and how many seats are left`() {
         val slot = slot(capacity = GROUP_SEATS)
         `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
@@ -267,6 +325,62 @@ class GroupSlotTest {
         assertFalse(first.isBookedByMe, "записан другой клиент")
     }
 
+    @Test
+    fun `a client in the waitlist sees their place in line`() {
+        val slot = slot(capacity = SINGLE_SEAT)
+        `when`(coachRepository.findById(COACH_ID)).thenReturn(Optional.of(coach()))
+        givenActiveClient(SECOND_CLIENT)
+        `when`(
+            slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(
+                anyNonNull(),
+                anyNonNull(),
+                anyNonNull(),
+            )
+        ).thenReturn(listOf(slot))
+        `when`(changeRequestRepository.findBySlotIdInAndStatus(anyNonNull(), anyNonNull())).thenReturn(emptyList())
+        `when`(participantRepository.findBySlotIdIn(anyNonNull())).thenReturn(listOf(participation(FIRST_CLIENT)))
+        `when`(roster.waitlistPositionsOf(anyNonNull(), anyNonNull())).thenReturn(mapOf(SLOT_ID to 2))
+
+        val schedule = service.clientSchedule(
+            userId = SECOND_CLIENT,
+            coachId = COACH_ID,
+            from = NOW,
+            to = SLOT_STARTS_AT,
+        )
+
+        val first = schedule.slots.single()
+        assertTrue(first.isOnWaitlist)
+        assertEquals(2, first.waitlistPosition, "впереди один человек")
+    }
+
+    @Test
+    fun `a client outside the waitlist has no place in line`() {
+        val slot = slot(capacity = SINGLE_SEAT)
+        `when`(coachRepository.findById(COACH_ID)).thenReturn(Optional.of(coach()))
+        givenActiveClient(SECOND_CLIENT)
+        `when`(
+            slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(
+                anyNonNull(),
+                anyNonNull(),
+                anyNonNull(),
+            )
+        ).thenReturn(listOf(slot))
+        `when`(changeRequestRepository.findBySlotIdInAndStatus(anyNonNull(), anyNonNull())).thenReturn(emptyList())
+        `when`(participantRepository.findBySlotIdIn(anyNonNull())).thenReturn(listOf(participation(FIRST_CLIENT)))
+        `when`(waitlistRepository.findBySlotIdInAndUserId(anyNonNull(), anyNonNull())).thenReturn(emptyList())
+
+        val schedule = service.clientSchedule(
+            userId = SECOND_CLIENT,
+            coachId = COACH_ID,
+            from = NOW,
+            to = SLOT_STARTS_AT,
+        )
+
+        val first = schedule.slots.single()
+        assertFalse(first.isOnWaitlist)
+        assertEquals(null, first.waitlistPosition)
+    }
+
     private fun givenSlot(slot: TrainingSlotEntity, takenBy: List<UUID>) {
         `when`(slotRepository.findWithLockById(SLOT_ID)).thenReturn(slot)
         `when`(participantRepository.countBySlotId(SLOT_ID)).thenReturn(takenBy.size)
@@ -290,13 +404,17 @@ class GroupSlotTest {
         )
     }
 
-    private fun slot(capacity: Int): TrainingSlotEntity = TrainingSlotEntity(
+    private fun slot(
+        capacity: Int,
+        startsAt: Instant = SLOT_STARTS_AT,
+        lifecycle: SlotLifecycle = SlotLifecycle.SCHEDULED,
+    ): TrainingSlotEntity = TrainingSlotEntity(
         id = SLOT_ID,
         coachId = COACH_ID,
-        startsAt = SLOT_STARTS_AT,
+        startsAt = startsAt,
         durationMinutes = SLOT_DURATION_MINUTES,
         capacity = capacity,
-        lifecycle = SlotLifecycle.SCHEDULED,
+        lifecycle = lifecycle,
         createdAt = NOW,
     )
 

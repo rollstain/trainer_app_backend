@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val PUSH_SLOT_ID_KEY = "slotId"
-private val WAITLIST_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
+private val SLOT_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 private const val PERSONAL_SLOT_CAPACITY = 1
 private const val MISSED_SESSIONS_WINDOW_DAYS = 30L
 private const val CHANGE_REQUESTS_PER_PAGE = 20
@@ -168,10 +168,7 @@ class ScheduleService(
             .filter { it.userId == userId }
             .map { it.slotId }
             .toSet()
-        val waitlistedSlotIds = waitlistRepository
-            .findBySlotIdInAndUserId(slotIds = slots.map { it.id }, userId = userId)
-            .map { it.slotId }
-            .toSet()
+        val waitlistPositions = roster.waitlistPositionsOf(userId = userId, slotIds = slots.map { it.id })
         return ClientScheduleResponse(
             coachId = coachId,
             zoneId = coach.zoneId,
@@ -185,7 +182,7 @@ class ScheduleService(
                         takenSeats = seatsBySlot[slot.id] ?: 0,
                         pendingBySlot = pendingBySlot,
                         cancellationWindowHours = coach.cancellationWindowHours,
-                        isOnWaitlist = waitlistedSlotIds.contains(slot.id),
+                        waitlistPosition = waitlistPositions[slot.id],
                     )
                 },
         )
@@ -225,9 +222,26 @@ class ScheduleService(
         val coach = requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
+        val participantsExpectIt =
+            slot.lifecycle == SlotLifecycle.SCHEDULED && slot.startsAt.isAfter(Instant.now(clock))
         slot.lifecycle = SlotLifecycle.CANCELLED
         rejectPendingRequest(slotId = slot.id)
+        if (participantsExpectIt) notifyCancellation(slot)
         return toCoachResponse(slot = slot, pendingRequestId = null)
+    }
+
+    private fun notifyCancellation(slot: TrainingSlotEntity) {
+        val participants = participantRepository.findBySlotId(slot.id)
+        if (participants.isEmpty()) return
+        pushSender.send(
+            userIds = participants.map { it.userId },
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = PushText.SLOT_CANCELLED,
+                args = listOf(slotTimeLabelOf(slot)),
+                data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
+            ),
+        )
     }
 
     @Transactional
@@ -289,7 +303,7 @@ class ScheduleService(
                 )
             )
         }
-        return clientResponseOf(slot = slot, userId = userId, isOnWaitlist = true)
+        return clientResponseOf(slot = slot, userId = userId)
     }
 
     @Transactional
@@ -300,11 +314,7 @@ class ScheduleService(
         return clientResponseOf(slot = slot, userId = userId)
     }
 
-    private fun clientResponseOf(
-        slot: TrainingSlotEntity,
-        userId: UUID,
-        isOnWaitlist: Boolean = false,
-    ): ClientSlotResponse {
+    private fun clientResponseOf(slot: TrainingSlotEntity, userId: UUID): ClientSlotResponse {
         val coach = coachRepository.findByIdOrNull(slot.coachId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
         return toClientResponse(
@@ -313,14 +323,14 @@ class ScheduleService(
             takenSeats = seatsTakenIn(slot.id),
             pendingBySlot = emptyMap(),
             cancellationWindowHours = coach.cancellationWindowHours,
-            isOnWaitlist = isOnWaitlist,
+            waitlistPosition = roster.waitlistPositionsOf(userId = userId, slotIds = listOf(slot.id))[slot.id],
         )
     }
 
-    private fun waitlistTimeLabelOf(slot: TrainingSlotEntity): String {
+    private fun slotTimeLabelOf(slot: TrainingSlotEntity): String {
         val coach = coachRepository.findByIdOrNull(slot.coachId)
         val zone = coach?.zoneId?.let { zoneId -> runCatching { ZoneId.of(zoneId) }.getOrNull() } ?: ZoneOffset.UTC
-        return slot.startsAt.atZone(zone).format(WAITLIST_TIME_FORMAT)
+        return slot.startsAt.atZone(zone).format(SLOT_TIME_FORMAT)
     }
 
     private fun notifyWaitlist(slot: TrainingSlotEntity) {
@@ -333,7 +343,7 @@ class ScheduleService(
             message = PushMessage(
                 channel = PushChannel.SCHEDULE,
                 text = PushText.WAITLIST_SLOT_FREED,
-                args = listOf(waitlistTimeLabelOf(slot)),
+                args = listOf(slotTimeLabelOf(slot)),
                 data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
             ),
         )
@@ -619,7 +629,7 @@ class ScheduleService(
         takenSeats: Int,
         pendingBySlot: Map<UUID, UUID>,
         cancellationWindowHours: Int,
-        isOnWaitlist: Boolean,
+        waitlistPosition: Int?,
     ): ClientSlotResponse {
         return ClientSlotResponse(
             id = slot.id,
@@ -632,7 +642,8 @@ class ScheduleService(
                 slot = slot,
                 cancellationWindowHours = cancellationWindowHours,
             ),
-            isOnWaitlist = isOnWaitlist,
+            isOnWaitlist = waitlistPosition != null,
+            waitlistPosition = waitlistPosition,
             capacity = slot.capacity,
             takenSeats = takenSeats,
         )

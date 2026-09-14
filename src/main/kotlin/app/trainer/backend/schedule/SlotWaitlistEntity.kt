@@ -37,5 +37,7 @@ interface SlotWaitlistRepository : JpaRepository<SlotWaitlistEntity, UUID> {
 
     fun findBySlotIdInAndUserId(slotIds: Collection<UUID>, userId: UUID): List<SlotWaitlistEntity>
 
+    fun findBySlotIdInOrderByCreatedAtAsc(slotIds: Collection<UUID>): List<SlotWaitlistEntity>
+
     fun deleteBySlotId(slotId: UUID)
 }
