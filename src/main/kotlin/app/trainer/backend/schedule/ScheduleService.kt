@@ -168,10 +168,7 @@ class ScheduleService(
             .filter { it.userId == userId }
             .map { it.slotId }
             .toSet()
-        val waitlistedSlotIds = waitlistRepository
-            .findBySlotIdInAndUserId(slotIds = slots.map { it.id }, userId = userId)
-            .map { it.slotId }
-            .toSet()
+        val waitlistPositions = roster.waitlistPositionsOf(userId = userId, slotIds = slots.map { it.id })
         return ClientScheduleResponse(
             coachId = coachId,
             zoneId = coach.zoneId,
@@ -185,7 +182,7 @@ class ScheduleService(
                         takenSeats = seatsBySlot[slot.id] ?: 0,
                         pendingBySlot = pendingBySlot,
                         cancellationWindowHours = coach.cancellationWindowHours,
-                        isOnWaitlist = waitlistedSlotIds.contains(slot.id),
+                        waitlistPosition = waitlistPositions[slot.id],
                     )
                 },
         )
@@ -306,7 +303,7 @@ class ScheduleService(
                 )
             )
         }
-        return clientResponseOf(slot = slot, userId = userId, isOnWaitlist = true)
+        return clientResponseOf(slot = slot, userId = userId)
     }
 
     @Transactional
@@ -317,11 +314,7 @@ class ScheduleService(
         return clientResponseOf(slot = slot, userId = userId)
     }
 
-    private fun clientResponseOf(
-        slot: TrainingSlotEntity,
-        userId: UUID,
-        isOnWaitlist: Boolean = false,
-    ): ClientSlotResponse {
+    private fun clientResponseOf(slot: TrainingSlotEntity, userId: UUID): ClientSlotResponse {
         val coach = coachRepository.findByIdOrNull(slot.coachId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
         return toClientResponse(
@@ -330,7 +323,7 @@ class ScheduleService(
             takenSeats = seatsTakenIn(slot.id),
             pendingBySlot = emptyMap(),
             cancellationWindowHours = coach.cancellationWindowHours,
-            isOnWaitlist = isOnWaitlist,
+            waitlistPosition = roster.waitlistPositionsOf(userId = userId, slotIds = listOf(slot.id))[slot.id],
         )
     }
 
@@ -636,7 +629,7 @@ class ScheduleService(
         takenSeats: Int,
         pendingBySlot: Map<UUID, UUID>,
         cancellationWindowHours: Int,
-        isOnWaitlist: Boolean,
+        waitlistPosition: Int?,
     ): ClientSlotResponse {
         return ClientSlotResponse(
             id = slot.id,
@@ -649,7 +642,8 @@ class ScheduleService(
                 slot = slot,
                 cancellationWindowHours = cancellationWindowHours,
             ),
-            isOnWaitlist = isOnWaitlist,
+            isOnWaitlist = waitlistPosition != null,
+            waitlistPosition = waitlistPosition,
             capacity = slot.capacity,
             takenSeats = takenSeats,
         )

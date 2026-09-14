@@ -91,6 +91,7 @@ data class ClientSlotResponse(
     val pendingChangeRequestId: UUID?,
     val canRequestChange: Boolean,
     val isOnWaitlist: Boolean,
+    val waitlistPosition: Int?,
     val capacity: Int,
     val takenSeats: Int,
 )
