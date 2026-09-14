@@ -10,6 +10,7 @@ enum class PushChannel(val androidChannelId: String) {
 enum class PushText(val titleKey: String, val bodyKey: String) {
     NEW_CHAT_MESSAGE("push.chat.new-message.title", "push.chat.new-message.body"),
     WAITLIST_SLOT_FREED("push.schedule.waitlist.title", "push.schedule.waitlist.body"),
+    SLOT_CANCELLED("push.schedule.cancelled.title", "push.schedule.cancelled.body"),
     SESSION_SOON("push.reminder.session.title", "push.reminder.session.body"),
     DIARY_IDLE("push.reminder.diary.title", "push.reminder.diary.body"),
     CHECK_IN_IDLE("push.reminder.check-in.title", "push.reminder.check-in.body"),
