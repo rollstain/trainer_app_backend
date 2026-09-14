@@ -45,6 +45,21 @@ class SlotRoster(
         return waiting.map { row -> waitingOf(row = row, names = names) }
     }
 
+    fun waitlistPositionsOf(userId: UUID, slotIds: Collection<UUID>): Map<UUID, Int> {
+        val waitingSlotIds = waitlistRepository
+            .findBySlotIdInAndUserId(slotIds = slotIds, userId = userId)
+            .map { it.slotId }
+        if (waitingSlotIds.isEmpty()) return emptyMap()
+        return waitlistRepository
+            .findBySlotIdInOrderByCreatedAtAsc(waitingSlotIds)
+            .groupBy { it.slotId }
+            .mapNotNull { (slotId, queue) ->
+                val index = queue.indexOfFirst { it.userId == userId }
+                if (index < 0) null else slotId to index + 1
+            }
+            .toMap()
+    }
+
     private fun participantOf(
         row: SlotParticipantEntity,
         names: Map<UUID, String>,

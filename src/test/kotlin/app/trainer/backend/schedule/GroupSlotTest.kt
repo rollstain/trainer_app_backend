@@ -325,6 +325,62 @@ class GroupSlotTest {
         assertFalse(first.isBookedByMe, "записан другой клиент")
     }
 
+    @Test
+    fun `a client in the waitlist sees their place in line`() {
+        val slot = slot(capacity = SINGLE_SEAT)
+        `when`(coachRepository.findById(COACH_ID)).thenReturn(Optional.of(coach()))
+        givenActiveClient(SECOND_CLIENT)
+        `when`(
+            slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(
+                anyNonNull(),
+                anyNonNull(),
+                anyNonNull(),
+            )
+        ).thenReturn(listOf(slot))
+        `when`(changeRequestRepository.findBySlotIdInAndStatus(anyNonNull(), anyNonNull())).thenReturn(emptyList())
+        `when`(participantRepository.findBySlotIdIn(anyNonNull())).thenReturn(listOf(participation(FIRST_CLIENT)))
+        `when`(roster.waitlistPositionsOf(anyNonNull(), anyNonNull())).thenReturn(mapOf(SLOT_ID to 2))
+
+        val schedule = service.clientSchedule(
+            userId = SECOND_CLIENT,
+            coachId = COACH_ID,
+            from = NOW,
+            to = SLOT_STARTS_AT,
+        )
+
+        val first = schedule.slots.single()
+        assertTrue(first.isOnWaitlist)
+        assertEquals(2, first.waitlistPosition, "впереди один человек")
+    }
+
+    @Test
+    fun `a client outside the waitlist has no place in line`() {
+        val slot = slot(capacity = SINGLE_SEAT)
+        `when`(coachRepository.findById(COACH_ID)).thenReturn(Optional.of(coach()))
+        givenActiveClient(SECOND_CLIENT)
+        `when`(
+            slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(
+                anyNonNull(),
+                anyNonNull(),
+                anyNonNull(),
+            )
+        ).thenReturn(listOf(slot))
+        `when`(changeRequestRepository.findBySlotIdInAndStatus(anyNonNull(), anyNonNull())).thenReturn(emptyList())
+        `when`(participantRepository.findBySlotIdIn(anyNonNull())).thenReturn(listOf(participation(FIRST_CLIENT)))
+        `when`(waitlistRepository.findBySlotIdInAndUserId(anyNonNull(), anyNonNull())).thenReturn(emptyList())
+
+        val schedule = service.clientSchedule(
+            userId = SECOND_CLIENT,
+            coachId = COACH_ID,
+            from = NOW,
+            to = SLOT_STARTS_AT,
+        )
+
+        val first = schedule.slots.single()
+        assertFalse(first.isOnWaitlist)
+        assertEquals(null, first.waitlistPosition)
+    }
+
     private fun givenSlot(slot: TrainingSlotEntity, takenBy: List<UUID>) {
         `when`(slotRepository.findWithLockById(SLOT_ID)).thenReturn(slot)
         `when`(participantRepository.countBySlotId(SLOT_ID)).thenReturn(takenBy.size)
