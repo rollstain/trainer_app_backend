@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val PUSH_SLOT_ID_KEY = "slotId"
-private val WAITLIST_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
+private val SLOT_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 private const val PERSONAL_SLOT_CAPACITY = 1
 private const val MISSED_SESSIONS_WINDOW_DAYS = 30L
 private const val CHANGE_REQUESTS_PER_PAGE = 20
@@ -225,9 +225,26 @@ class ScheduleService(
         val coach = requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
+        val participantsExpectIt =
+            slot.lifecycle == SlotLifecycle.SCHEDULED && slot.startsAt.isAfter(Instant.now(clock))
         slot.lifecycle = SlotLifecycle.CANCELLED
         rejectPendingRequest(slotId = slot.id)
+        if (participantsExpectIt) notifyCancellation(slot)
         return toCoachResponse(slot = slot, pendingRequestId = null)
+    }
+
+    private fun notifyCancellation(slot: TrainingSlotEntity) {
+        val participants = participantRepository.findBySlotId(slot.id)
+        if (participants.isEmpty()) return
+        pushSender.send(
+            userIds = participants.map { it.userId },
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = PushText.SLOT_CANCELLED,
+                args = listOf(slotTimeLabelOf(slot)),
+                data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
+            ),
+        )
     }
 
     @Transactional
@@ -317,10 +334,10 @@ class ScheduleService(
         )
     }
 
-    private fun waitlistTimeLabelOf(slot: TrainingSlotEntity): String {
+    private fun slotTimeLabelOf(slot: TrainingSlotEntity): String {
         val coach = coachRepository.findByIdOrNull(slot.coachId)
         val zone = coach?.zoneId?.let { zoneId -> runCatching { ZoneId.of(zoneId) }.getOrNull() } ?: ZoneOffset.UTC
-        return slot.startsAt.atZone(zone).format(WAITLIST_TIME_FORMAT)
+        return slot.startsAt.atZone(zone).format(SLOT_TIME_FORMAT)
     }
 
     private fun notifyWaitlist(slot: TrainingSlotEntity) {
@@ -333,7 +350,7 @@ class ScheduleService(
             message = PushMessage(
                 channel = PushChannel.SCHEDULE,
                 text = PushText.WAITLIST_SLOT_FREED,
-                args = listOf(waitlistTimeLabelOf(slot)),
+                args = listOf(slotTimeLabelOf(slot)),
                 data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
             ),
         )
