@@ -79,7 +79,7 @@ class ExternalAuthServiceTest {
     }
 
     @Test
-    fun `an account already tied to someone else is refused`() {
+    fun `an account already tied to someone else is refused, not reported as pending`() {
         givenVerifiedYandexUser()
         `when`(identityRepository.findByProviderAndSubjectHash(anyNonNull(), anyNonNull()))
             .thenReturn(identity(UUID.randomUUID()))
@@ -88,7 +88,8 @@ class ExternalAuthServiceTest {
             service.link(userId = KNOWN_USER_ID, request = LinkIdentityRequest(ExternalProvider.YANDEX, YANDEX_TOKEN))
         }
 
-        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+        assertEquals(HttpStatus.FORBIDDEN, failure.statusCode)
+        verify(identityRepository, never()).save(anyNonNull())
     }
 
     @Test

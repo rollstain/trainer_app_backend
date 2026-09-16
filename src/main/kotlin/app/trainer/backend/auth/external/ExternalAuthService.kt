@@ -48,7 +48,7 @@ class ExternalAuthService(
             subjectHash = subjectHash,
         )
         if (owner != null && owner.userId != userId) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Этот аккаунт уже привязан к другому профилю")
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Этот аккаунт уже привязан к другому профилю")
         }
         if (owner == null) {
             identityRepository.save(
@@ -73,7 +73,7 @@ class ExternalAuthService(
             subjectHash = subjectHash,
         )
         if (owner != null && owner.userId != userId) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Этот аккаунт уже привязан к другому профилю")
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Этот аккаунт уже привязан к другому профилю")
         }
         if (owner != null) return
         identityRepository.save(
