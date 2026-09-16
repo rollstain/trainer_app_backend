@@ -13,6 +13,8 @@ POLL_TIMEOUT_SECONDS = 30
 REQUEST_TIMEOUT_SECONDS = 45
 RETRY_DELAY_SECONDS = 5
 START_COMMAND = "/start"
+HTTP_GONE = 410
+KIND_LINK = "LINK"
 
 REPLY_CONFIRMED = "Готово. Вернитесь в приложение — вход завершится сам."
 REPLY_LINKED = "Готово. Теперь входите в приложение кнопкой «Войти через Telegram»."
@@ -80,6 +82,29 @@ class TelegramBot:
             url=f"{TELEGRAM_API}/bot{self.settings.bot_token}/sendMessage",
             payload={"chat_id": chat_id, "text": text},
         )
+
+    def confirm(self, start_code, sender):
+        payload = {
+            "startCode": start_code,
+            "telegramUserId": str(sender.get("id")),
+            "telegramDisplayName": display_name_of(sender),
+            "telegramUsername": sender.get("username"),
+        }
+        try:
+            status, answer = post_json(
+                url=f"{self.settings.api_url}/auth/telegram/confirm",
+                payload=payload,
+                headers={"X-Telegram-Bot-Secret": self.settings.bot_secret},
+            )
+        except urllib.error.HTTPError as failure:
+            logger.warning("сервер отказал: %s", failure.code)
+            return REPLY_LINK_DEAD if failure.code == HTTP_GONE else REPLY_FAILED
+        except urllib.error.URLError as failure:
+            logger.error("сервер недоступен: %s", failure.reason)
+            return REPLY_FAILED
+        kind = (answer or {}).get("kind")
+        logger.info("вход подтверждён, статус %s, вид %s", status, kind)
+        return REPLY_LINKED if kind == KIND_LINK else REPLY_CONFIRMED
 
     def accept(self, update):
         self.offset = update["update_id"] + 1
