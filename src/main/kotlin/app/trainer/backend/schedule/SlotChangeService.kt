@@ -176,6 +176,9 @@ class SlotChangeService(
         if (body.kind == SlotChangeKind.RESCHEDULE && body.proposedStartsAt == null) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Для переноса нужно новое время")
         }
+        if (body.proposedStartsAt?.isAfter(now) == false) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Новое время уже прошло")
+        }
         if (!slot.startsAt.isAfter(now)) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Занятие уже началось")
         }
@@ -184,21 +187,52 @@ class SlotChangeService(
     private fun applyChange(slot: TrainingSlotEntity, request: SlotChangeRequestEntity) {
         when (request.kind) {
             SlotChangeKind.CANCEL -> seats.free(slot = slot, userId = request.requestedByUserId)
-            SlotChangeKind.RESCHEDULE -> {
-                val proposed = request.proposedStartsAt
-                    ?: throw ResponseStatusException(HttpStatus.CONFLICT, "В заявке нет нового времени")
-                val overlaps = slotRepository.hasOverlap(
-                    coachId = slot.coachId,
-                    startsAt = proposed,
-                    durationMinutes = slot.durationMinutes,
-                    excludedSlotId = slot.id,
-                )
-                if (overlaps) {
-                    throw ResponseStatusException(HttpStatus.CONFLICT, "Новое время пересекается с другим слотом")
-                }
-                slot.startsAt = proposed
-            }
+            SlotChangeKind.RESCHEDULE -> reschedule(slot = slot, request = request)
         }
+    }
+
+    private fun reschedule(slot: TrainingSlotEntity, request: SlotChangeRequestEntity) {
+        val proposed = request.proposedStartsAt
+            ?: throw ResponseStatusException(HttpStatus.CONFLICT, "В заявке нет нового времени")
+        val vacant = vacantPersonalSlotAt(coachId = slot.coachId, startsAt = proposed, movedSlotId = slot.id)
+        if (vacant != null) {
+            moveSeat(from = slot, to = vacant, userId = request.requestedByUserId)
+            request.slotId = vacant.id
+            return
+        }
+        val overlaps = slotRepository.hasOverlap(
+            coachId = slot.coachId,
+            startsAt = proposed,
+            durationMinutes = slot.durationMinutes,
+            excludedSlotId = slot.id,
+        )
+        if (overlaps) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Новое время пересекается с другим слотом")
+        }
+        slot.startsAt = proposed
+    }
+
+    private fun vacantPersonalSlotAt(coachId: UUID, startsAt: Instant, movedSlotId: UUID): TrainingSlotEntity? =
+        slotRepository
+            .findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(coachId = coachId, from = startsAt, to = startsAt)
+            .firstOrNull { candidate ->
+                candidate.id != movedSlotId &&
+                    candidate.lifecycle == SlotLifecycle.SCHEDULED &&
+                    candidate.capacity == PERSONAL_SLOT_CAPACITY
+            }
+            ?.let { candidate -> slotRepository.findWithLockById(candidate.id) }
+            ?.takeIf { candidate -> participantRepository.countBySlotId(candidate.id) == 0 }
+
+    private fun moveSeat(from: TrainingSlotEntity, to: TrainingSlotEntity, userId: UUID) {
+        seats.free(slot = from, userId = userId)
+        participantRepository.save(
+            SlotParticipantEntity(
+                id = UUID.randomUUID(),
+                slotId = to.id,
+                userId = userId,
+                createdAt = Instant.now(clock),
+            )
+        )
     }
 
     private fun notifyCoachOfCancellation(coach: CoachEntity, slot: TrainingSlotEntity, userId: UUID) {
