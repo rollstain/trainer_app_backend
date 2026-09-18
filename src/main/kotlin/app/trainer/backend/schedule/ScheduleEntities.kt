@@ -54,7 +54,7 @@ class SlotChangeRequestEntity(
     val id: UUID,
 
     @Column(name = "slot_id")
-    val slotId: UUID,
+    var slotId: UUID,
 
     @Column(name = "requested_by_user_id")
     val requestedByUserId: UUID,

@@ -34,11 +34,13 @@ private val SLOT_ID: UUID = UUID.fromString("91000000-0000-0000-0000-00000000000
 private val CLIENT: UUID = UUID.fromString("91000000-0000-0000-0000-000000000004")
 private val STRANGER: UUID = UUID.fromString("91000000-0000-0000-0000-000000000005")
 private val REQUEST_ID: UUID = UUID.fromString("91000000-0000-0000-0000-000000000006")
+private val FREE_SLOT_ID: UUID = UUID.fromString("91000000-0000-0000-0000-000000000007")
 private val NOW: Instant = Instant.parse("2026-03-02T09:00:00Z")
 private val AHEAD_OF_WINDOW: Instant = Instant.parse("2026-03-03T09:00:00Z")
 private val INSIDE_WINDOW: Instant = Instant.parse("2026-03-02T15:00:00Z")
 private val ALREADY_STARTED: Instant = Instant.parse("2026-03-02T08:30:00Z")
 private val PROPOSED: Instant = Instant.parse("2026-03-04T09:00:00Z")
+private val ALREADY_PASSED: Instant = Instant.parse("2026-03-01T09:00:00Z")
 private const val CLIENT_NAME = "Анна"
 private const val SLOT_DURATION_MINUTES = 60
 private const val SINGLE_SEAT = 1
@@ -156,6 +158,81 @@ class ChangeRequestTest {
     }
 
     @Test
+    fun `a reschedule to a time that has passed is refused`() {
+        givenBooked(startsAt = AHEAD_OF_WINDOW)
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            changes.requestChange(
+                userId = CLIENT,
+                slotId = SLOT_ID,
+                body = SlotChangeRequestBody(kind = SlotChangeKind.RESCHEDULE, proposedStartsAt = ALREADY_PASSED),
+            )
+        }
+
+        assertEquals(HttpStatus.BAD_REQUEST, failure.statusCode)
+    }
+
+    @Test
+    fun `an approved reschedule into the coach's free slot moves the seat there`() {
+        val booked = slot(startsAt = AHEAD_OF_WINDOW)
+        val seat = givenPendingReschedule(booked)
+        val free = slot(startsAt = PROPOSED, id = FREE_SLOT_ID)
+        `when`(slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(COACH_ID, PROPOSED, PROPOSED))
+            .thenReturn(listOf(free))
+        `when`(slotRepository.findWithLockById(FREE_SLOT_ID)).thenReturn(free)
+
+        val resolved = changes.resolveChange(
+            coachUserId = COACH_USER_ID,
+            requestId = REQUEST_ID,
+            approve = true,
+            comment = null,
+        )
+
+        verify(participantRepository).delete(seat)
+        val taken = ArgumentCaptor.forClass(SlotParticipantEntity::class.java)
+        verify(participantRepository).save(capturedBy<SlotParticipantEntity>(taken))
+        assertEquals(FREE_SLOT_ID, taken.value.slotId)
+        assertEquals(CLIENT, taken.value.userId)
+        assertEquals(FREE_SLOT_ID, resolved.slotId)
+        assertEquals(AHEAD_OF_WINDOW, booked.startsAt)
+    }
+
+    @Test
+    fun `an approved reschedule to open time moves the session itself`() {
+        val booked = slot(startsAt = AHEAD_OF_WINDOW)
+        val seat = givenPendingReschedule(booked)
+
+        val resolved = changes.resolveChange(
+            coachUserId = COACH_USER_ID,
+            requestId = REQUEST_ID,
+            approve = true,
+            comment = null,
+        )
+
+        assertEquals(PROPOSED, booked.startsAt)
+        assertEquals(SLOT_ID, resolved.slotId)
+        verify(participantRepository, never()).delete(seat)
+    }
+
+    @Test
+    fun `a reschedule onto a booked session is refused`() {
+        givenPendingReschedule(slot(startsAt = AHEAD_OF_WINDOW))
+        val taken = slot(startsAt = PROPOSED, id = FREE_SLOT_ID)
+        `when`(slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(COACH_ID, PROPOSED, PROPOSED))
+            .thenReturn(listOf(taken))
+        `when`(slotRepository.findWithLockById(FREE_SLOT_ID)).thenReturn(taken)
+        `when`(participantRepository.countBySlotId(FREE_SLOT_ID)).thenReturn(SINGLE_SEAT)
+        `when`(slotRepository.findOverlappingSlotIds(anyNonNull(), anyNonNull(), anyNonNull()))
+            .thenReturn(listOf(FREE_SLOT_ID))
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            changes.resolveChange(coachUserId = COACH_USER_ID, requestId = REQUEST_ID, approve = true, comment = null)
+        }
+
+        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+    }
+
+    @Test
     fun `a client withdraws their own pending request`() {
         givenBooked(startsAt = AHEAD_OF_WINDOW)
         val pending = request(status = SlotChangeStatus.PENDING, requestedBy = CLIENT)
@@ -253,6 +330,16 @@ class ChangeRequestTest {
         return seat
     }
 
+    private fun givenPendingReschedule(booked: TrainingSlotEntity): SlotParticipantEntity {
+        val seat = participation()
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(slotRepository.findWithLockById(SLOT_ID)).thenReturn(booked)
+        `when`(participantRepository.findBySlotIdAndUserId(SLOT_ID, CLIENT)).thenReturn(seat)
+        `when`(changeRequestRepository.findById(REQUEST_ID))
+            .thenReturn(Optional.of(request(status = SlotChangeStatus.PENDING, requestedBy = CLIENT)))
+        return seat
+    }
+
     private fun givenActiveClient() {
         `when`(coachClientRepository.findByCoachIdAndUserId(COACH_ID, CLIENT)).thenReturn(
             CoachClientEntity(
@@ -289,8 +376,8 @@ class ChangeRequestTest {
         coachComment = comment,
     )
 
-    private fun slot(startsAt: Instant): TrainingSlotEntity = TrainingSlotEntity(
-        id = SLOT_ID,
+    private fun slot(startsAt: Instant, id: UUID = SLOT_ID): TrainingSlotEntity = TrainingSlotEntity(
+        id = id,
         coachId = COACH_ID,
         startsAt = startsAt,
         durationMinutes = SLOT_DURATION_MINUTES,
