@@ -4,24 +4,14 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
-import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
-import app.trainer.backend.config.MAX_PAGE_SIZE
-import app.trainer.backend.config.Page
-import app.trainer.backend.config.PageCursor
-import app.trainer.backend.config.decodeCursor
-import app.trainer.backend.config.encodeCursor
-import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.push.PushChannel
 import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
 import app.trainer.backend.push.PushText
-import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
@@ -31,10 +21,8 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val PUSH_SLOT_ID_KEY = "slotId"
-private val SLOT_TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")
 private const val PERSONAL_SLOT_CAPACITY = 1
 private const val MISSED_SESSIONS_WINDOW_DAYS = 30L
-private const val CHANGE_REQUESTS_PER_PAGE = 20
 
 @Service
 class ScheduleService(
@@ -42,18 +30,23 @@ class ScheduleService(
     private val changeRequestRepository: SlotChangeRequestRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
-    private val userRepository: UserRepository,
     private val waitlistRepository: SlotWaitlistRepository,
     private val roster: SlotRoster,
     private val participantRepository: SlotParticipantRepository,
+    private val seats: SlotSeats,
     private val pushSender: PushSender,
     private val clock: Clock,
 ) {
 
     @Transactional
     fun createSlot(coachUserId: UUID, request: CreateSlotRequest): CoachSlotResponse {
-        val coach = requireCoach(coachUserId)
-        if (hasOverlap(coachId = coach.id, startsAt = request.startsAt, durationMinutes = request.durationMinutes)) {
+        val coach = coachRepository.requireCoach(coachUserId)
+        val overlaps = slotRepository.hasOverlap(
+            coachId = coach.id,
+            startsAt = request.startsAt,
+            durationMinutes = request.durationMinutes,
+        )
+        if (overlaps) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Слот пересекается с существующим")
         }
         val slot = saveFreeSlot(
@@ -67,13 +60,13 @@ class ScheduleService(
 
     @Transactional
     fun createSlotSeries(coachUserId: UUID, request: CreateSlotSeriesRequest): CreateSlotSeriesResponse {
-        val coach = requireCoach(coachUserId)
+        val coach = coachRepository.requireCoach(coachUserId)
         val zone = coachZone(coach)
         val created = mutableListOf<CoachSlotResponse>()
         val skipped = mutableListOf<SkippedSlotResponse>()
 
         seriesStarts(request = request, zone = zone).forEach { startsAt ->
-            val overlaps = hasOverlap(
+            val overlaps = slotRepository.hasOverlap(
                 coachId = coach.id,
                 startsAt = startsAt,
                 durationMinutes = request.durationMinutes,
@@ -97,7 +90,7 @@ class ScheduleService(
 
     @Transactional(readOnly = true)
     fun missedSessionsByClient(coachUserId: UUID, clientUserIds: List<UUID>): Map<UUID, Int> {
-        val coach = requireCoach(coachUserId)
+        val coach = coachRepository.requireCoach(coachUserId)
         if (clientUserIds.isEmpty()) return emptyMap()
         val now = Instant.now(clock)
         return participantRepository
@@ -120,7 +113,7 @@ class ScheduleService(
 
     @Transactional(readOnly = true)
     fun coachSchedule(coachUserId: UUID, from: Instant, to: Instant): CoachScheduleResponse {
-        val coach = requireCoach(coachUserId)
+        val coach = coachRepository.requireCoach(coachUserId)
         val slots = slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(
             coachId = coach.id,
             from = from,
@@ -145,7 +138,7 @@ class ScheduleService(
 
     @Transactional(readOnly = true)
     fun coachSlot(coachUserId: UUID, slotId: UUID): CoachSlotResponse {
-        val coach = requireCoach(coachUserId)
+        val coach = coachRepository.requireCoach(coachUserId)
         val slot = slotRepository.findByIdOrNull(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
         return toCoachResponse(slot = slot, pendingRequestId = pendingRequestIdsFor(listOf(slot))[slot.id])
@@ -162,6 +155,7 @@ class ScheduleService(
             to = to,
         )
         val pendingBySlot = pendingRequestIdsFor(slots)
+        val latestRequests = latestRequestsOf(userId = userId, slots = slots)
         val seatsBySlot = seatsTakenIn(slots)
         val mySlotIds = participantRepository
             .findBySlotIdIn(slots.map { it.id })
@@ -181,6 +175,7 @@ class ScheduleService(
                         isMine = mySlotIds.contains(slot.id),
                         takenSeats = seatsBySlot[slot.id] ?: 0,
                         pendingBySlot = pendingBySlot,
+                        latestRequest = latestRequests[slot.id],
                         cancellationWindowHours = coach.cancellationWindowHours,
                         waitlistPosition = waitlistPositions[slot.id],
                     )
@@ -190,7 +185,7 @@ class ScheduleService(
 
     @Transactional
     fun assignSlot(coachUserId: UUID, slotId: UUID, clientUserId: UUID): CoachSlotResponse {
-        val coach = requireCoach(coachUserId)
+        val coach = coachRepository.requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
         requireActiveCoachClient(coachId = coach.id, userId = clientUserId)
@@ -203,7 +198,7 @@ class ScheduleService(
 
     @Transactional
     fun removeParticipant(coachUserId: UUID, slotId: UUID, clientUserId: UUID): CoachSlotResponse {
-        val coach = requireCoach(coachUserId)
+        val coach = coachRepository.requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
         if (slot.lifecycle == SlotLifecycle.COMPLETED) {
@@ -213,13 +208,13 @@ class ScheduleService(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Подопечный не записан на это занятие")
         }
         rejectPendingRequest(slotId = slot.id)
-        freeSeat(slot = slot, userId = clientUserId)
+        seats.free(slot = slot, userId = clientUserId)
         return toCoachResponse(slot = slot, pendingRequestId = null)
     }
 
     @Transactional
     fun cancelSlot(coachUserId: UUID, slotId: UUID): CoachSlotResponse {
-        val coach = requireCoach(coachUserId)
+        val coach = coachRepository.requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
         val participantsExpectIt =
@@ -238,7 +233,7 @@ class ScheduleService(
             message = PushMessage(
                 channel = PushChannel.SCHEDULE,
                 text = PushText.SLOT_CANCELLED,
-                args = listOf(slotTimeLabelOf(slot)),
+                args = listOf(seats.timeLabelOf(slot)),
                 data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
             ),
         )
@@ -255,13 +250,13 @@ class ScheduleService(
             .filter { it.lifecycle == SlotLifecycle.SCHEDULED }
             .forEach { slot ->
                 rejectPendingRequest(slotId = slot.id)
-                freeSeat(slot = slot, userId = clientUserId)
+                seats.free(slot = slot, userId = clientUserId)
             }
     }
 
     @Transactional
     fun completeSlot(coachUserId: UUID, slotId: UUID): CoachSlotResponse {
-        val coach = requireCoach(coachUserId)
+        val coach = coachRepository.requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireSlotOwnedBy(slot = slot, coach = coach)
         if (seatsTakenIn(slot.id) == 0) {
@@ -321,155 +316,11 @@ class ScheduleService(
             slot = slot,
             isMine = participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId) != null,
             takenSeats = seatsTakenIn(slot.id),
-            pendingBySlot = emptyMap(),
+            pendingBySlot = pendingRequestIdsFor(listOf(slot)),
+            latestRequest = latestRequestsOf(userId = userId, slots = listOf(slot))[slot.id],
             cancellationWindowHours = coach.cancellationWindowHours,
             waitlistPosition = roster.waitlistPositionsOf(userId = userId, slotIds = listOf(slot.id))[slot.id],
         )
-    }
-
-    private fun slotTimeLabelOf(slot: TrainingSlotEntity): String {
-        val coach = coachRepository.findByIdOrNull(slot.coachId)
-        val zone = coach?.zoneId?.let { zoneId -> runCatching { ZoneId.of(zoneId) }.getOrNull() } ?: ZoneOffset.UTC
-        return slot.startsAt.atZone(zone).format(SLOT_TIME_FORMAT)
-    }
-
-    private fun notifyWaitlist(slot: TrainingSlotEntity) {
-        val waiting = waitlistRepository.findBySlotIdOrderByCreatedAtAsc(slot.id)
-        if (waiting.isEmpty()) return
-        val now = Instant.now(clock)
-        waiting.forEach { entry -> entry.notifiedAt = now }
-        pushSender.send(
-            userIds = waiting.map { it.userId },
-            message = PushMessage(
-                channel = PushChannel.SCHEDULE,
-                text = PushText.WAITLIST_SLOT_FREED,
-                args = listOf(slotTimeLabelOf(slot)),
-                data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
-            ),
-        )
-    }
-
-    @Transactional
-    fun requestChange(userId: UUID, slotId: UUID, body: SlotChangeRequestBody): SlotChangeRequestResponse {
-        val slot = slotRepository.findByIdOrNull(slotId) ?: slotNotFound()
-        if (participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId) == null) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Вы не записаны на это занятие")
-        }
-        if (slot.lifecycle != SlotLifecycle.SCHEDULED) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "По этому слоту заявку подать нельзя")
-        }
-        if (body.kind == SlotChangeKind.RESCHEDULE && slot.capacity > PERSONAL_SLOT_CAPACITY) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Групповое занятие переносит тренер: вы можете только отменить своё участие",
-            )
-        }
-        if (body.kind == SlotChangeKind.RESCHEDULE && body.proposedStartsAt == null) {
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Для переноса нужно новое время")
-        }
-        val coach = coachRepository.findByIdOrNull(slot.coachId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Тренер не найден")
-        if (!isWithinChangeWindow(slot = slot, cancellationWindowHours = coach.cancellationWindowHours)) {
-            throw ResponseStatusException(
-                HttpStatus.CONFLICT,
-                "Изменить запись можно не позднее чем за ${coach.cancellationWindowHours} ч до начала",
-            )
-        }
-        val alreadyPending = changeRequestRepository.findBySlotIdAndStatus(
-            slotId = slotId,
-            status = SlotChangeStatus.PENDING,
-        )
-        if (alreadyPending != null) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "По слоту уже есть заявка на рассмотрении")
-        }
-        val request = changeRequestRepository.save(
-            SlotChangeRequestEntity(
-                id = UUID.randomUUID(),
-                slotId = slotId,
-                requestedByUserId = userId,
-                kind = body.kind,
-                proposedStartsAt = body.proposedStartsAt,
-                status = SlotChangeStatus.PENDING,
-                createdAt = Instant.now(clock),
-                resolvedAt = null,
-            )
-        )
-        return toResponse(request = request, slot = slot)
-    }
-
-    @Transactional(readOnly = true)
-    fun pendingChangeRequests(
-        coachUserId: UUID,
-        from: Instant?,
-        to: Instant?,
-        limit: Int?,
-        after: String?,
-    ): Page<SlotChangeRequestResponse> {
-        val coach = requireCoach(coachUserId)
-        val pageSize = if (from == null || to == null) {
-            pageSizeOf(limit) ?: CHANGE_REQUESTS_PER_PAGE
-        } else {
-            MAX_PAGE_SIZE
-        }
-        val cursor = decodeCursor(after)
-        val fetched = changeRequestRepository.findByCoachIdAndStatusPage(
-            coachId = coach.id,
-            status = SlotChangeStatus.PENDING.name,
-            from = from?.toString(),
-            to = to?.toString(),
-            afterCreatedAt = cursor?.sortKey,
-            afterId = cursor?.id,
-            pageSize = pageSize + EXTRA_ROW_TO_DETECT_NEXT_PAGE,
-        )
-        val requests = fetched.take(pageSize)
-        val last = requests.lastOrNull()?.takeIf { fetched.size > pageSize }
-        val slotsById = slotRepository
-            .findAllById(requests.map { it.slotId }.distinct())
-            .associateBy { it.id }
-        return Page(
-            items = requests.mapNotNull { request ->
-                val slot = slotsById[request.slotId] ?: return@mapNotNull null
-                toResponse(request = request, slot = slot)
-            },
-            nextCursor = last?.let { encodeCursor(PageCursor(sortKey = it.createdAt.toString(), id = it.id)) },
-        )
-    }
-
-    @Transactional
-    fun resolveChange(coachUserId: UUID, requestId: UUID, approve: Boolean): SlotChangeRequestResponse {
-        val coach = requireCoach(coachUserId)
-        val request = changeRequestRepository.findByIdOrNull(requestId)
-            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Заявка не найдена")
-        if (request.status != SlotChangeStatus.PENDING) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Заявка уже рассмотрена")
-        }
-        val slot = slotRepository.findWithLockById(request.slotId) ?: slotNotFound()
-        requireSlotOwnedBy(slot = slot, coach = coach)
-
-        request.status = if (approve) SlotChangeStatus.APPROVED else SlotChangeStatus.REJECTED
-        request.resolvedAt = Instant.now(clock)
-        if (approve) applyChange(slot = slot, request = request)
-        return toResponse(request = request, slot = slot)
-    }
-
-    private fun applyChange(slot: TrainingSlotEntity, request: SlotChangeRequestEntity) {
-        when (request.kind) {
-            SlotChangeKind.CANCEL -> freeSeat(slot = slot, userId = request.requestedByUserId)
-            SlotChangeKind.RESCHEDULE -> {
-                val proposed = request.proposedStartsAt
-                    ?: throw ResponseStatusException(HttpStatus.CONFLICT, "В заявке нет нового времени")
-                val overlaps = hasOverlap(
-                    coachId = slot.coachId,
-                    startsAt = proposed,
-                    durationMinutes = slot.durationMinutes,
-                    excludedSlotId = slot.id,
-                )
-                if (overlaps) {
-                    throw ResponseStatusException(HttpStatus.CONFLICT, "Новое время пересекается с другим слотом")
-                }
-                slot.startsAt = proposed
-            }
-        }
     }
 
     private fun rejectPendingRequest(slotId: UUID) {
@@ -541,22 +392,15 @@ class ScheduleService(
         )
     }
 
-    private fun freeSeat(slot: TrainingSlotEntity, userId: UUID) {
-        val participation = participantRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId) ?: return
-        participantRepository.delete(participation)
-        notifyWaitlist(slot)
-    }
-
-    private fun hasOverlap(
-        coachId: UUID,
-        startsAt: Instant,
-        durationMinutes: Int,
-        excludedSlotId: UUID? = null,
-    ): Boolean {
-        val endsAt = startsAt.plus(durationMinutes.toLong(), ChronoUnit.MINUTES)
-        return slotRepository
-            .findOverlappingSlotIds(coachId = coachId, startsAt = startsAt, endsAt = endsAt)
-            .any { it != excludedSlotId }
+    private fun latestRequestsOf(
+        userId: UUID,
+        slots: List<TrainingSlotEntity>,
+    ): Map<UUID, SlotChangeRequestEntity> {
+        if (slots.isEmpty()) return emptyMap()
+        return changeRequestRepository
+            .findBySlotIdInAndRequestedByUserId(slotIds = slots.map { it.id }, requestedByUserId = userId)
+            .groupBy { it.slotId }
+            .mapValues { (_, requests) -> requests.maxBy { it.createdAt } }
     }
 
     private fun pendingRequestIdsFor(slots: List<TrainingSlotEntity>): Map<UUID, UUID> {
@@ -576,24 +420,11 @@ class ScheduleService(
         }
     }
 
-    private fun requireCoach(coachUserId: UUID): CoachEntity = coachRepository.findByUserId(coachUserId)
-        ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не тренер")
-
-    private fun requireSlotOwnedBy(slot: TrainingSlotEntity, coach: CoachEntity) {
-        if (slot.coachId != coach.id) {
-            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Слот другого тренера")
-        }
-    }
-
     private fun requireActiveCoachClient(coachId: UUID, userId: UUID) {
         val link = coachClientRepository.findByCoachIdAndUserId(coachId = coachId, userId = userId)
         if (link == null || link.status != CoachClientStatus.ACTIVE) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Нет доступа к расписанию тренера")
         }
-    }
-
-    private fun displayNameOf(userId: UUID?): String? {
-        return userId?.let { userRepository.findByIdOrNull(it)?.displayName }
     }
 
     private fun toCoachResponse(
@@ -628,6 +459,7 @@ class ScheduleService(
         isMine: Boolean,
         takenSeats: Int,
         pendingBySlot: Map<UUID, UUID>,
+        latestRequest: SlotChangeRequestEntity?,
         cancellationWindowHours: Int,
         waitlistPosition: Int?,
     ): ClientSlotResponse {
@@ -638,9 +470,11 @@ class ScheduleService(
             isBookedByMe = isMine,
             isAvailable = statusOf(slot = slot, takenSeats = takenSeats) == SlotStatus.FREE,
             pendingChangeRequestId = if (isMine) pendingBySlot[slot.id] else null,
-            canRequestChange = isMine && isWithinChangeWindow(
-                slot = slot,
+            changeRequest = if (isMine) latestRequest?.let(::toClientChangeResponse) else null,
+            canRequestChange = isMine && isBeforeChangeDeadline(
+                startsAt = slot.startsAt,
                 cancellationWindowHours = cancellationWindowHours,
+                now = Instant.now(clock),
             ),
             isOnWaitlist = waitlistPosition != null,
             waitlistPosition = waitlistPosition,
@@ -649,27 +483,14 @@ class ScheduleService(
         )
     }
 
-    private fun isWithinChangeWindow(slot: TrainingSlotEntity, cancellationWindowHours: Int): Boolean {
-        val deadline = slot.startsAt.minus(cancellationWindowHours.toLong(), ChronoUnit.HOURS)
-        return Instant.now(clock).isBefore(deadline)
-    }
-
-    private fun toResponse(
-        request: SlotChangeRequestEntity,
-        slot: TrainingSlotEntity,
-    ): SlotChangeRequestResponse = SlotChangeRequestResponse(
-        id = request.id,
-        slotId = request.slotId,
-        slotStartsAt = slot.startsAt,
-        requestedByUserId = request.requestedByUserId,
-        requestedByDisplayName = displayNameOf(request.requestedByUserId),
-        kind = request.kind,
-        proposedStartsAt = request.proposedStartsAt,
-        status = request.status,
-        createdAt = request.createdAt,
-    )
-
-    private fun slotNotFound(): Nothing {
-        throw ResponseStatusException(HttpStatus.NOT_FOUND, "Слот не найден")
-    }
+    private fun toClientChangeResponse(request: SlotChangeRequestEntity): ClientChangeRequestResponse =
+        ClientChangeRequestResponse(
+            id = request.id,
+            kind = request.kind,
+            status = request.status,
+            proposedStartsAt = request.proposedStartsAt,
+            originalStartsAt = request.originalStartsAt,
+            coachComment = request.coachComment,
+            resolvedAt = request.resolvedAt,
+        )
 }

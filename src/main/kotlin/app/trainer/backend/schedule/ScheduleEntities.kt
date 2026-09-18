@@ -66,6 +66,9 @@ class SlotChangeRequestEntity(
     @Column(name = "proposed_starts_at")
     val proposedStartsAt: Instant?,
 
+    @Column(name = "original_starts_at")
+    val originalStartsAt: Instant?,
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     var status: SlotChangeStatus,
@@ -75,6 +78,9 @@ class SlotChangeRequestEntity(
 
     @Column(name = "resolved_at")
     var resolvedAt: Instant?,
+
+    @Column(name = "coach_comment")
+    var coachComment: String?,
 )
 
 @Entity

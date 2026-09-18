@@ -4,7 +4,6 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.push.PushSender
-import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -46,21 +45,28 @@ class MissedSessionsTest {
     private val changeRequestRepository = mock(SlotChangeRequestRepository::class.java)
     private val coachRepository = mock(CoachRepository::class.java)
     private val coachClientRepository = mock(CoachClientRepository::class.java)
-    private val userRepository = mock(UserRepository::class.java)
     private val waitlistRepository = mock(SlotWaitlistRepository::class.java)
     private val roster = mock(SlotRoster::class.java)
     private val participantRepository = mock(SlotParticipantRepository::class.java)
     private val pushSender = mock(PushSender::class.java)
+
+    private val seats = SlotSeats(
+        participantRepository = participantRepository,
+        waitlistRepository = waitlistRepository,
+        coachRepository = coachRepository,
+        pushSender = pushSender,
+        clock = Clock.fixed(NOW, ZoneOffset.UTC),
+    )
 
     private val service = ScheduleService(
         slotRepository = slotRepository,
         changeRequestRepository = changeRequestRepository,
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
-        userRepository = userRepository,
         waitlistRepository = waitlistRepository,
         roster = roster,
         participantRepository = participantRepository,
+        seats = seats,
         pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
