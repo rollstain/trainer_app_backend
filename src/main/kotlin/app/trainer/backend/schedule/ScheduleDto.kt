@@ -10,6 +10,8 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.util.UUID
 
+private const val COACH_COMMENT_MAX_LENGTH = 500
+
 private const val MAX_SERIES_WEEKS = 52L
 private const val MAX_SLOT_DURATION_MINUTES = 600L
 private const val MIN_SLOT_CAPACITY = 1L
@@ -89,6 +91,7 @@ data class ClientSlotResponse(
     val isBookedByMe: Boolean,
     val isAvailable: Boolean,
     val pendingChangeRequestId: UUID?,
+    val changeRequest: ClientChangeRequestResponse?,
     val canRequestChange: Boolean,
     val isOnWaitlist: Boolean,
     val waitlistPosition: Int?,
@@ -126,4 +129,18 @@ data class SlotChangeRequestResponse(
     val createdAt: Instant,
 )
 
-data class ResolveChangeRequestBody(val approve: Boolean)
+data class ClientChangeRequestResponse(
+    val id: UUID,
+    val kind: SlotChangeKind,
+    val status: SlotChangeStatus,
+    val proposedStartsAt: Instant?,
+    val originalStartsAt: Instant?,
+    val coachComment: String?,
+    val resolvedAt: Instant?,
+)
+
+data class ResolveChangeRequestBody(
+    val approve: Boolean,
+    @field:Size(max = COACH_COMMENT_MAX_LENGTH)
+    val comment: String?,
+)

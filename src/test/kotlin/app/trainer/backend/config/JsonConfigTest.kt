@@ -45,6 +45,7 @@ class JsonConfigTest {
                 isBookedByMe = true,
                 isAvailable = false,
                 pendingChangeRequestId = null,
+                changeRequest = null,
                 canRequestChange = true,
                 isOnWaitlist = false,
                 waitlistPosition = null,
@@ -54,6 +55,7 @@ class JsonConfigTest {
         )
 
         assertFalse(json.contains("pendingChangeRequestId"), json)
+        assertFalse(json.contains("changeRequest"), json)
         assertFalse(json.contains("waitlistPosition"), json)
         assertTrue(json.contains("isOnWaitlist"), "ложь — это значение: $json")
     }

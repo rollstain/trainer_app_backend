@@ -6,6 +6,7 @@ import jakarta.validation.Valid
 import java.time.Instant
 import java.util.UUID
 import org.springframework.format.annotation.DateTimeFormat
+import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -14,11 +15,15 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
 @RequestMapping("/schedule")
-class ScheduleController(private val scheduleService: ScheduleService) {
+class ScheduleController(
+    private val scheduleService: ScheduleService,
+    private val slotChangeService: SlotChangeService,
+) {
 
     @PostMapping("/slots")
     fun createSlot(
@@ -117,7 +122,7 @@ class ScheduleController(private val scheduleService: ScheduleService) {
         @PathVariable slotId: UUID,
         @RequestBody body: SlotChangeRequestBody,
     ): SlotChangeRequestResponse {
-        return scheduleService.requestChange(userId = userId, slotId = slotId, body = body)
+        return slotChangeService.requestChange(userId = userId, slotId = slotId, body = body)
     }
 
     @GetMapping("/change-requests/pending")
@@ -129,7 +134,7 @@ class ScheduleController(private val scheduleService: ScheduleService) {
         @RequestParam(required = false) after: String?,
     ): ResponseEntity<List<SlotChangeRequestResponse>> {
         return pageResponse(
-            scheduleService.pendingChangeRequests(
+            slotChangeService.pendingChangeRequests(
                 coachUserId = coachUserId,
                 from = from,
                 to = to,
@@ -143,12 +148,19 @@ class ScheduleController(private val scheduleService: ScheduleService) {
     fun resolveChange(
         @CurrentUserId coachUserId: UUID,
         @PathVariable requestId: UUID,
-        @RequestBody body: ResolveChangeRequestBody,
+        @Valid @RequestBody body: ResolveChangeRequestBody,
     ): SlotChangeRequestResponse {
-        return scheduleService.resolveChange(
+        return slotChangeService.resolveChange(
             coachUserId = coachUserId,
             requestId = requestId,
             approve = body.approve,
+            comment = body.comment,
         )
+    }
+
+    @DeleteMapping("/change-requests/{requestId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun withdrawChange(@CurrentUserId userId: UUID, @PathVariable requestId: UUID) {
+        slotChangeService.withdrawChange(userId = userId, requestId = requestId)
     }
 }

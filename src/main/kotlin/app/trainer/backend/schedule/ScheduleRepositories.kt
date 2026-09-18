@@ -77,6 +77,11 @@ interface SlotChangeRequestRepository : JpaRepository<SlotChangeRequestEntity, U
 
     fun findBySlotIdInAndStatus(slotIds: Collection<UUID>, status: SlotChangeStatus): List<SlotChangeRequestEntity>
 
+    fun findBySlotIdInAndRequestedByUserId(
+        slotIds: Collection<UUID>,
+        requestedByUserId: UUID,
+    ): List<SlotChangeRequestEntity>
+
     @Query(
         value = """
             select r.* from slot_change_requests r

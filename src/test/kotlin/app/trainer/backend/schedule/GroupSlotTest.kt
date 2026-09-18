@@ -63,15 +63,34 @@ class GroupSlotTest {
     private val participantRepository = mock(SlotParticipantRepository::class.java)
     private val pushSender = mock(PushSender::class.java)
 
+    private val seats = SlotSeats(
+        participantRepository = participantRepository,
+        waitlistRepository = waitlistRepository,
+        coachRepository = coachRepository,
+        pushSender = pushSender,
+        clock = Clock.fixed(NOW, ZoneOffset.UTC),
+    )
+
     private val service = ScheduleService(
         slotRepository = slotRepository,
         changeRequestRepository = changeRequestRepository,
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
-        userRepository = userRepository,
         waitlistRepository = waitlistRepository,
         roster = roster,
         participantRepository = participantRepository,
+        seats = seats,
+        pushSender = pushSender,
+        clock = Clock.fixed(NOW, ZoneOffset.UTC),
+    )
+
+    private val changes = SlotChangeService(
+        slotRepository = slotRepository,
+        changeRequestRepository = changeRequestRepository,
+        participantRepository = participantRepository,
+        coachRepository = coachRepository,
+        userRepository = userRepository,
+        seats = seats,
         pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
@@ -151,7 +170,7 @@ class GroupSlotTest {
             .thenReturn(participation(FIRST_CLIENT))
 
         val failure = assertFailsWith<ResponseStatusException> {
-            service.requestChange(
+            changes.requestChange(
                 userId = FIRST_CLIENT,
                 slotId = SLOT_ID,
                 body = SlotChangeRequestBody(
@@ -167,21 +186,22 @@ class GroupSlotTest {
     @Test
     fun `a client leaves a group session without moving it`() {
         val slot = slot(capacity = GROUP_SEATS)
+        val seat = participation(FIRST_CLIENT)
         `when`(slotRepository.findById(SLOT_ID)).thenReturn(Optional.of(slot))
-        `when`(participantRepository.findBySlotIdAndUserId(SLOT_ID, FIRST_CLIENT))
-            .thenReturn(participation(FIRST_CLIENT))
+        `when`(participantRepository.findBySlotIdAndUserId(SLOT_ID, FIRST_CLIENT)).thenReturn(seat)
         `when`(coachRepository.findById(COACH_ID)).thenReturn(Optional.of(coach()))
         `when`(changeRequestRepository.save(anyNonNull<SlotChangeRequestEntity>()))
             .thenAnswer { it.arguments.first() as SlotChangeRequestEntity }
 
-        val request = service.requestChange(
+        val request = changes.requestChange(
             userId = FIRST_CLIENT,
             slotId = SLOT_ID,
             body = SlotChangeRequestBody(kind = SlotChangeKind.CANCEL, proposedStartsAt = null),
         )
 
-        assertEquals(SlotChangeStatus.PENDING, request.status)
+        assertEquals(SlotChangeStatus.APPROVED, request.status, "до окна отмены место освобождается сразу")
         assertEquals(SLOT_STARTS_AT, request.slotStartsAt, "время занятия остаётся прежним")
+        verify(participantRepository).delete(seat)
     }
 
     @Test
