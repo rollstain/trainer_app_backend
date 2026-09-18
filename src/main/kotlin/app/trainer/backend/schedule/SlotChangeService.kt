@@ -200,15 +200,6 @@ class SlotChangeService(
             request.slotId = vacant.id
             return
         }
-        val overlaps = slotRepository.hasOverlap(
-            coachId = slot.coachId,
-            startsAt = proposed,
-            durationMinutes = slot.durationMinutes,
-            excludedSlotId = slot.id,
-        )
-        if (overlaps) {
-            throw ResponseStatusException(HttpStatus.CONFLICT, "Новое время пересекается с другим слотом")
-        }
         slot.startsAt = proposed
     }
 

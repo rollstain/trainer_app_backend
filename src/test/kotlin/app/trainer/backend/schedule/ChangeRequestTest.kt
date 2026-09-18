@@ -215,21 +215,25 @@ class ChangeRequestTest {
     }
 
     @Test
-    fun `a reschedule onto a booked session is refused`() {
-        givenPendingReschedule(slot(startsAt = AHEAD_OF_WINDOW))
+    fun `the coach may move a session onto a time that is already booked`() {
+        val booked = slot(startsAt = AHEAD_OF_WINDOW)
+        val seat = givenPendingReschedule(booked)
         val taken = slot(startsAt = PROPOSED, id = FREE_SLOT_ID)
         `when`(slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(COACH_ID, PROPOSED, PROPOSED))
             .thenReturn(listOf(taken))
         `when`(slotRepository.findWithLockById(FREE_SLOT_ID)).thenReturn(taken)
         `when`(participantRepository.countBySlotId(FREE_SLOT_ID)).thenReturn(SINGLE_SEAT)
-        `when`(slotRepository.findOverlappingSlotIds(anyNonNull(), anyNonNull(), anyNonNull()))
-            .thenReturn(listOf(FREE_SLOT_ID))
 
-        val failure = assertFailsWith<ResponseStatusException> {
-            changes.resolveChange(coachUserId = COACH_USER_ID, requestId = REQUEST_ID, approve = true, comment = null)
-        }
+        val resolved = changes.resolveChange(
+            coachUserId = COACH_USER_ID,
+            requestId = REQUEST_ID,
+            approve = true,
+            comment = null,
+        )
 
-        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+        assertEquals(PROPOSED, booked.startsAt)
+        assertEquals(SLOT_ID, resolved.slotId)
+        verify(participantRepository, never()).delete(seat)
     }
 
     @Test
