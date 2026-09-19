@@ -22,12 +22,15 @@ def main():
         text = path.read_text(encoding="utf-8")
         dropped = {match.group(1).lower() for match in DROPS.finditer(text)}
         dropped |= {index for index, table in table_of_index.items() if table in dropped}
+        for name in dropped:
+            created_by.pop(name, None)
+            table_of_index.pop(name, None)
 
         created = [(match.group(1).lower(), match.group(2).lower()) for match in CREATE_INDEX.finditer(text)]
         created += [(match.group(1).lower(), None) for match in CREATE_TABLE.finditer(text)]
         for name, table in created:
             owner = created_by.get(name)
-            if owner and name not in dropped:
+            if owner:
                 failures.append(f"V{version} создаёт '{name}', уже созданный в {owner}")
             created_by[name] = path.name
             if table is not None:
