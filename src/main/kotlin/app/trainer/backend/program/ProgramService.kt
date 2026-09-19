@@ -344,6 +344,10 @@ class ProgramService(
         val today = LocalDate.now(clock.withZone(coachZone))
         val days = dayRepository.findByProgramIdOrderByWeekNumberAscDayOfWeekAsc(program.id)
         val daysByWeek = days.groupBy { it.weekNumber }
+        val exercisesCountByDay = exerciseLineRepository
+            .findByProgramDayIdInOrderByPositionAsc(days.map { it.id })
+            .groupingBy { it.programDayId }
+            .eachCount()
         return ClientProgramResponse(
             programId = program.id,
             programTitle = program.title,
@@ -357,6 +361,7 @@ class ProgramService(
                 program = program,
                 assignment = assignment,
                 daysByWeek = daysByWeek,
+                exercisesCountByDay = exercisesCountByDay,
                 today = today,
             ),
         )
@@ -366,6 +371,7 @@ class ProgramService(
         program: TrainingProgramEntity,
         assignment: ProgramAssignmentEntity,
         daysByWeek: Map<Int, List<ProgramDayEntity>>,
+        exercisesCountByDay: Map<UUID, Int>,
         today: LocalDate,
     ): List<ProgramWeekProgressResponse> {
         val roundDays = program.weeksCount.toLong() * DAYS_IN_WEEK
@@ -382,13 +388,22 @@ class ProgramService(
         return (1..program.weeksCount).map { weekNumber ->
             val weekStart = roundStart.plusWeeks(weekNumber - 1L)
             val plannedDays = daysByWeek[weekNumber].orEmpty()
+            val weekDays = plannedDays
+                .map { day ->
+                    val date = dateInWeek(weekStart = weekStart, dayOfWeek = day.dayOfWeek)
+                    ProgramWeekDayResponse(
+                        date = date,
+                        title = day.title,
+                        exercisesCount = exercisesCountByDay[day.id] ?: 0,
+                        isLogged = !date.isAfter(today) && date in loggedDates,
+                    )
+                }
+                .sortedBy { it.date }
             ProgramWeekProgressResponse(
                 weekNumber = weekNumber,
                 daysOfWeek = plannedDays.map { it.dayOfWeek },
-                doneCount = plannedDays.count { day ->
-                    val date = dateInWeek(weekStart = weekStart, dayOfWeek = day.dayOfWeek)
-                    !date.isAfter(today) && date in loggedDates
-                },
+                doneCount = weekDays.count { it.isLogged },
+                days = weekDays,
             )
         }
     }

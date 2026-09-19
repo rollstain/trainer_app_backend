@@ -127,6 +127,14 @@ data class ProgramWeekProgressResponse(
     val weekNumber: Int,
     val daysOfWeek: List<Int>,
     val doneCount: Int,
+    val days: List<ProgramWeekDayResponse>,
+)
+
+data class ProgramWeekDayResponse(
+    val date: LocalDate,
+    val title: String,
+    val exercisesCount: Int,
+    val isLogged: Boolean,
 )
 
 data class ClientProgramStateResponse(val program: ClientProgramResponse?)
