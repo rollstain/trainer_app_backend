@@ -125,8 +125,6 @@ data class ClientProgramResponse(
 
 data class ProgramWeekProgressResponse(
     val weekNumber: Int,
-    val daysOfWeek: List<Int>,
-    val doneCount: Int,
     val days: List<ProgramWeekDayResponse>,
 )
 

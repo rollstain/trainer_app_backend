@@ -387,23 +387,19 @@ class ProgramService(
             .toSet()
         return (1..program.weeksCount).map { weekNumber ->
             val weekStart = roundStart.plusWeeks(weekNumber - 1L)
-            val plannedDays = daysByWeek[weekNumber].orEmpty()
-            val weekDays = plannedDays
-                .map { day ->
-                    val date = dateInWeek(weekStart = weekStart, dayOfWeek = day.dayOfWeek)
-                    ProgramWeekDayResponse(
-                        date = date,
-                        title = day.title,
-                        exercisesCount = exercisesCountByDay[day.id] ?: 0,
-                        isLogged = !date.isAfter(today) && date in loggedDates,
-                    )
-                }
-                .sortedBy { it.date }
             ProgramWeekProgressResponse(
                 weekNumber = weekNumber,
-                daysOfWeek = plannedDays.map { it.dayOfWeek },
-                doneCount = weekDays.count { it.isLogged },
-                days = weekDays,
+                days = daysByWeek[weekNumber].orEmpty()
+                    .map { day ->
+                        val date = dateInWeek(weekStart = weekStart, dayOfWeek = day.dayOfWeek)
+                        ProgramWeekDayResponse(
+                            date = date,
+                            title = day.title,
+                            exercisesCount = exercisesCountByDay[day.id] ?: 0,
+                            isLogged = !date.isAfter(today) && date in loggedDates,
+                        )
+                    }
+                    .sortedBy { it.date },
             )
         }
     }
