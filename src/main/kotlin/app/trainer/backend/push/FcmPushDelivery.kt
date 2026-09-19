@@ -12,13 +12,13 @@ import org.slf4j.LoggerFactory
 
 private const val FCM_BATCH_LIMIT = 500
 
-class FcmPushSender(
+class FcmPushDelivery(
     private val messaging: FirebaseMessaging,
     private val tokenRepository: PushTokenRepository,
     private val pushTexts: PushTexts,
-) : PushSender {
+) : PushDelivery {
 
-    private val logger = LoggerFactory.getLogger(FcmPushSender::class.java)
+    private val logger = LoggerFactory.getLogger(FcmPushDelivery::class.java)
 
     override fun send(userIds: Collection<UUID>, message: PushMessage) {
         if (userIds.isEmpty()) return
@@ -77,9 +77,9 @@ class FcmPushSender(
     }
 }
 
-class NoOpPushSender : PushSender {
+class NoOpPushDelivery : PushDelivery {
 
-    private val logger = LoggerFactory.getLogger(NoOpPushSender::class.java)
+    private val logger = LoggerFactory.getLogger(NoOpPushDelivery::class.java)
 
     override fun send(userIds: Collection<UUID>, message: PushMessage) {
         logger.info(
