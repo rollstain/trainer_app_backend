@@ -10,6 +10,7 @@ import app.trainer.backend.coach.CoachRequestService
 import app.trainer.backend.coach.CoachRequestStatusResponse
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
+import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 import java.time.Instant
 import java.util.UUID
@@ -45,6 +46,12 @@ data class BecomeCoachRequest(
     val zoneId: String,
 )
 
+data class RenameMeRequest(
+    @field:NotBlank
+    @field:Size(max = DISPLAY_NAME_MAX_LENGTH, message = DISPLAY_NAME_TOO_LONG)
+    val displayName: String,
+)
+
 data class UpdateContactRequest(
     val phone: String?,
     val email: String?,
@@ -60,6 +67,18 @@ class MeController(
     private val coachRequestService: CoachRequestService,
     private val emailConfirmationService: EmailConfirmationService,
 ) {
+
+    @PatchMapping("/me/name")
+    @Transactional
+    fun rename(
+        @CurrentUserId userId: UUID,
+        @Valid @RequestBody request: RenameMeRequest,
+    ): MeResponse {
+        val user = userRepository.findByIdOrNull(userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден")
+        user.displayName = request.displayName.trim()
+        return toResponse(user)
+    }
 
     @PatchMapping("/me/contact")
     @Transactional
