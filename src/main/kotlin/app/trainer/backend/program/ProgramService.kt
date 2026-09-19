@@ -17,6 +17,7 @@ import app.trainer.backend.push.PushText
 import app.trainer.backend.traininglog.ExerciseEntity
 import app.trainer.backend.traininglog.ExerciseOwnerKind
 import app.trainer.backend.traininglog.ExerciseRepository
+import app.trainer.backend.traininglog.TrainingLogEntryRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -43,6 +44,7 @@ class ProgramService(
     private val exerciseRepository: ExerciseRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
+    private val entryRepository: TrainingLogEntryRepository,
     private val pushSender: PushSender,
     private val clock: Clock,
 ) {
@@ -68,6 +70,7 @@ class ProgramService(
                     weeksCount = row.getWeeksCount(),
                     filledDaysCount = row.getFilledDaysCount().toInt(),
                     assignedClientsCount = row.getAssignedClientsCount().toInt(),
+                    daysPerWeek = row.getDaysPerWeek().toInt(),
                 )
             },
             nextCursor = last?.let {
@@ -320,15 +323,58 @@ class ProgramService(
     ): ClientProgramResponse {
         val today = LocalDate.now(clock.withZone(coachZone))
         val days = dayRepository.findByProgramIdOrderByWeekNumberAscDayOfWeekAsc(program.id)
+        val daysByWeek = days.groupBy { it.weekNumber }
         return ClientProgramResponse(
             programId = program.id,
             programTitle = program.title,
             startsOn = assignment.startsOn,
+            assignedAt = assignment.createdAt,
             weeksCount = program.weeksCount,
+            daysPerWeek = daysByWeek.values.maxOfOrNull { it.size } ?: 0,
             currentWeekNumber = weekNumberOn(program = program, assignment = assignment, date = today),
             todayDayTitle = dayFor(program = program, assignment = assignment, days = days, date = today)?.title,
+            weeks = weeksOfCurrentRound(
+                program = program,
+                assignment = assignment,
+                daysByWeek = daysByWeek,
+                today = today,
+            ),
         )
     }
+
+    private fun weeksOfCurrentRound(
+        program: TrainingProgramEntity,
+        assignment: ProgramAssignmentEntity,
+        daysByWeek: Map<Int, List<ProgramDayEntity>>,
+        today: LocalDate,
+    ): List<ProgramWeekProgressResponse> {
+        val roundDays = program.weeksCount.toLong() * DAYS_IN_WEEK
+        val daysSinceStart = ChronoUnit.DAYS.between(assignment.startsOn, today).coerceAtLeast(0)
+        val roundStart = assignment.startsOn.plusDays(daysSinceStart / roundDays * roundDays)
+        val loggedDates = entryRepository
+            .findByClientUserIdAndEntryDateBetweenOrderByEntryDateDesc(
+                clientUserId = assignment.clientUserId,
+                from = roundStart,
+                to = roundStart.plusDays(roundDays - 1),
+            )
+            .map { it.entryDate }
+            .toSet()
+        return (1..program.weeksCount).map { weekNumber ->
+            val weekStart = roundStart.plusWeeks(weekNumber - 1L)
+            val plannedDays = daysByWeek[weekNumber].orEmpty()
+            ProgramWeekProgressResponse(
+                weekNumber = weekNumber,
+                daysOfWeek = plannedDays.map { it.dayOfWeek },
+                doneCount = plannedDays.count { day ->
+                    val date = dateInWeek(weekStart = weekStart, dayOfWeek = day.dayOfWeek)
+                    !date.isAfter(today) && date in loggedDates
+                },
+            )
+        }
+    }
+
+    private fun dateInWeek(weekStart: LocalDate, dayOfWeek: Int): LocalDate =
+        weekStart.plusDays(((dayOfWeek - weekStart.dayOfWeek.value + DAYS_IN_WEEK) % DAYS_IN_WEEK).toLong())
 
     private fun toResponse(
         program: TrainingProgramEntity,

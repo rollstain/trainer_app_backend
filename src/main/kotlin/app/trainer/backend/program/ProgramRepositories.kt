@@ -18,6 +18,8 @@ interface ProgramSummaryRow {
 
     fun getAssignedClientsCount(): Long
 
+    fun getDaysPerWeek(): Long
+
     fun getCreatedAt(): Instant
 }
 
@@ -38,7 +40,16 @@ interface TrainingProgramRepository : JpaRepository<TrainingProgramEntity, UUID>
                    (
                      select count(*) from program_assignments pa
                      where pa.program_id = p.id and pa.ended_at is null
-                   ) as assignedClientsCount
+                   ) as assignedClientsCount,
+                   (
+                     select coalesce(max(week_days.days_count), 0)
+                     from (
+                       select count(*) as days_count
+                       from program_days pd
+                       where pd.program_id = p.id
+                       group by pd.week_number
+                     ) week_days
+                   ) as daysPerWeek
             from training_programs p
             where p.coach_id = :coachId
               and p.archived_at is null

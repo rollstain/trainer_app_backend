@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
@@ -23,6 +24,7 @@ data class ProgramSummaryResponse(
     val weeksCount: Int,
     val filledDaysCount: Int,
     val assignedClientsCount: Int,
+    val daysPerWeek: Int,
 )
 
 data class ProgramExerciseResponse(
@@ -107,9 +109,18 @@ data class ClientProgramResponse(
     val programId: UUID,
     val programTitle: String,
     val startsOn: LocalDate,
+    val assignedAt: Instant,
     val weeksCount: Int,
+    val daysPerWeek: Int,
     val currentWeekNumber: Int?,
     val todayDayTitle: String?,
+    val weeks: List<ProgramWeekProgressResponse>,
+)
+
+data class ProgramWeekProgressResponse(
+    val weekNumber: Int,
+    val daysOfWeek: List<Int>,
+    val doneCount: Int,
 )
 
 data class ClientProgramStateResponse(val program: ClientProgramResponse?)

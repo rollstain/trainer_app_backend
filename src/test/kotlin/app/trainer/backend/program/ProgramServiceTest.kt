@@ -12,6 +12,8 @@ import app.trainer.backend.traininglog.ExerciseKind
 import app.trainer.backend.traininglog.ExerciseOwnerKind
 import app.trainer.backend.traininglog.ExerciseRepository
 import app.trainer.backend.traininglog.MuscleGroup
+import app.trainer.backend.traininglog.TrainingLogEntryEntity
+import app.trainer.backend.traininglog.TrainingLogEntryRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -57,6 +59,7 @@ class ProgramServiceTest {
     private val exerciseRepository = mock(ExerciseRepository::class.java)
     private val coachRepository = mock(CoachRepository::class.java)
     private val coachClientRepository = mock(CoachClientRepository::class.java)
+    private val entryRepository = mock(TrainingLogEntryRepository::class.java)
     private val pushSender = mock(PushSender::class.java)
 
     private val service = serviceAt(NOW)
@@ -69,6 +72,7 @@ class ProgramServiceTest {
         exerciseRepository = exerciseRepository,
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
+        entryRepository = entryRepository,
         pushSender = pushSender,
         clock = Clock.fixed(now, ZoneOffset.UTC),
     )
@@ -87,6 +91,55 @@ class ProgramServiceTest {
         assertEquals(WEEKS_IN_PROGRAM, program?.weeksCount)
         assertEquals(WEEKS_IN_PROGRAM, program?.currentWeekNumber)
         assertEquals("День ног", program?.todayDayTitle)
+    }
+
+    @Test
+    fun `the coach sees how far the client went through each week of the round`() {
+        givenCoach()
+        givenActiveClient()
+        givenAssignedProgram()
+        `when`(
+            entryRepository.findByClientUserIdAndEntryDateBetweenOrderByEntryDateDesc(
+                CLIENT_USER_ID,
+                STARTS_ON,
+                STARTS_ON.plusDays(WEEKS_IN_PROGRAM * DAYS_IN_A_WEEK - 1),
+            )
+        ).thenReturn(listOf(entryOn(STARTS_ON)))
+
+        val program = serviceAt(NOW.plusSeconds(SECONDS_IN_A_WEEK)).clientProgram(
+            coachUserId = COACH_USER_ID,
+            clientUserId = CLIENT_USER_ID,
+        )
+
+        val startDay = listOf(STARTS_ON.dayOfWeek.value)
+        assertEquals(1, program?.daysPerWeek)
+        assertEquals(NOW, program?.assignedAt)
+        assertEquals(
+            listOf(
+                ProgramWeekProgressResponse(weekNumber = 1, daysOfWeek = startDay, doneCount = 1),
+                ProgramWeekProgressResponse(weekNumber = 2, daysOfWeek = startDay, doneCount = 0),
+            ),
+            program?.weeks,
+        )
+    }
+
+    @Test
+    fun `a new round counts from its own first week`() {
+        givenCoach()
+        givenActiveClient()
+        givenAssignedProgram()
+        val secondRoundStart = STARTS_ON.plusDays(WEEKS_IN_PROGRAM * DAYS_IN_A_WEEK)
+
+        serviceAt(NOW.plusSeconds(SECONDS_IN_A_WEEK * WEEKS_IN_PROGRAM)).clientProgram(
+            coachUserId = COACH_USER_ID,
+            clientUserId = CLIENT_USER_ID,
+        )
+
+        verify(entryRepository).findByClientUserIdAndEntryDateBetweenOrderByEntryDateDesc(
+            CLIENT_USER_ID,
+            secondRoundStart,
+            secondRoundStart.plusDays(WEEKS_IN_PROGRAM * DAYS_IN_A_WEEK - 1),
+        )
     }
 
     @Test
@@ -421,6 +474,16 @@ class ProgramServiceTest {
         weightGrams = null,
         restSeconds = null,
         note = null,
+    )
+
+    private fun entryOn(date: LocalDate): TrainingLogEntryEntity = TrainingLogEntryEntity(
+        id = UUID.randomUUID(),
+        clientUserId = CLIENT_USER_ID,
+        entryDate = date,
+        slotId = null,
+        notes = null,
+        createdAt = NOW,
+        updatedAt = NOW,
     )
 
     private fun squat(): ExerciseEntity = ExerciseEntity(
