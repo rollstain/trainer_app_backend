@@ -4,6 +4,10 @@ import app.trainer.backend.auth.external.ExternalIdentityRepository
 import app.trainer.backend.auth.external.ExternalProvider
 import app.trainer.backend.auth.external.VerifiedIdentity
 import app.trainer.backend.auth.external.subjectHashOf
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
+import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
@@ -29,6 +33,7 @@ class CoachRequestService(
     private val userRepository: UserRepository,
     private val coachRepository: CoachRepository,
     private val identityRepository: ExternalIdentityRepository,
+    private val pushSender: PushSender,
     private val clock: Clock,
 ) {
 
@@ -104,7 +109,20 @@ class CoachRequestService(
         request.status = if (approve) CoachRequestStatus.APPROVED else CoachRequestStatus.DECLINED
         request.decidedAt = Instant.now(clock)
         if (approve) promote(user = user, zoneId = request.zoneId)
+        tellAboutDecision(userId = user.id, approve = approve)
         return CoachDecisionResponse(status = request.status, displayName = user.displayName)
+    }
+
+    private fun tellAboutDecision(userId: UUID, approve: Boolean) {
+        pushSender.send(
+            userIds = listOf(userId),
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = if (approve) PushText.COACH_REQUEST_APPROVED else PushText.COACH_REQUEST_DECLINED,
+                args = emptyList(),
+                data = emptyMap(),
+            ),
+        )
     }
 
     private fun requireMayAsk(known: CoachRequestEntity?) {
