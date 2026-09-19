@@ -30,6 +30,7 @@ data class ExerciseResponse(
     val lastWeightGrams: Int?,
     val lastDurationSeconds: Int?,
     val lastDistanceMeters: Int?,
+    val programsCount: Int,
 )
 
 data class CreateExerciseRequest(

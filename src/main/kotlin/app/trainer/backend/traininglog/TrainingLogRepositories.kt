@@ -49,6 +49,31 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
     ): List<ExerciseEntity>
 
     fun findByOwnerIdAndArchivedAtIsNull(ownerId: UUID): List<ExerciseEntity>
+
+    @Query(
+        value = """
+            select pe.exercise_id as exerciseId, count(distinct pd.program_id) as programsCount
+            from program_exercises pe
+            join program_days pd on pd.id = pe.program_day_id
+            join training_programs tp on tp.id = pd.program_id
+            where tp.coach_id = :coachId
+              and tp.archived_at is null
+              and pe.exercise_id = any (cast(:exerciseIds as uuid[]))
+            group by pe.exercise_id
+        """,
+        nativeQuery = true,
+    )
+    fun countProgramsUsing(
+        @Param("coachId") coachId: UUID,
+        @Param("exerciseIds") exerciseIds: Array<UUID>,
+    ): List<ExerciseUsage>
+}
+
+interface ExerciseUsage {
+
+    fun getExerciseId(): UUID
+
+    fun getProgramsCount(): Long
 }
 
 interface ClientDiaryDay {
