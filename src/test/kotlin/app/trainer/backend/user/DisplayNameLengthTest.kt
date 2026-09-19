@@ -23,6 +23,7 @@ class DisplayNameLengthTest {
         assertTrue(validator.validate(redeem(longest)).isEmpty())
         assertTrue(validator.validate(becomeCoach(longest)).isEmpty())
         assertTrue(validator.validate(onboardCoach(longest)).isEmpty())
+        assertTrue(validator.validate(RenameMeRequest(displayName = longest)).isEmpty())
     }
 
     @Test
@@ -31,6 +32,12 @@ class DisplayNameLengthTest {
         assertEquals(setOf("displayName"), refusedFields(redeem(tooLong)))
         assertEquals(setOf("displayName"), refusedFields(becomeCoach(tooLong)))
         assertEquals(setOf("displayName"), refusedFields(onboardCoach(tooLong)))
+        assertEquals(setOf("displayName"), refusedFields(RenameMeRequest(displayName = tooLong)))
+    }
+
+    @Test
+    fun `a blank name is not a new name`() {
+        assertEquals(setOf("displayName"), refusedFields(RenameMeRequest(displayName = "   ")))
     }
 
     private fun refusedFields(request: Any): Set<String> =
