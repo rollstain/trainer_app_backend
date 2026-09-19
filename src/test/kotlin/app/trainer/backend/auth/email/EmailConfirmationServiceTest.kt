@@ -35,6 +35,7 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val CONFIRM_TOKEN = "confirm-token-from-the-letter"
 private const val SECONDS_IN_HOUR = 3600L
+private const val OLD_EMAIL = "old@mail.ru"
 private val HOLDER_ID: UUID = UUID.fromString("c0000000-0000-0000-0000-000000000002")
 
 class EmailConfirmationServiceTest {
@@ -177,17 +178,74 @@ class EmailConfirmationServiceTest {
     }
 
     @Test
-    fun `a letter for a replaced address is refused`() {
-        val user = userEntity(email = "new@mail.ru", emailConfirmedAt = null)
+    fun `a letter for a new address moves the account to it`() {
+        val user = userEntity(email = OLD_EMAIL, emailConfirmedAt = NOW.minusSeconds(SECONDS_IN_HOUR))
         `when`(tokenRepository.findByTokenHash(hashOf(CONFIRM_TOKEN))).thenReturn(confirmToken())
         `when`(userRepository.findById(USER_ID)).thenReturn(Optional.of(user))
 
+        service.confirm(ConfirmEmailRequest(token = CONFIRM_TOKEN))
+
+        assertEquals(EMAIL, user.email)
+        assertEquals(NOW, user.emailConfirmedAt)
+    }
+
+    @Test
+    fun `replacing the address retires earlier letters even when mail is off`() {
+        `when`(mailService.isConfigured).thenReturn(false)
+        val earlier = confirmToken()
+        `when`(tokenRepository.findByUserIdAndConsumedAtIsNull(USER_ID)).thenReturn(listOf(earlier))
+
+        service.beginQuietly(user = userEntity(email = OLD_EMAIL, emailConfirmedAt = null), email = OLD_EMAIL)
+
+        assertEquals(NOW, earlier.consumedAt)
+    }
+
+    @Test
+    fun `a change is asked by a letter to the new address while the old one stays`() {
+        givenMailWorks()
+        val user = userEntity(email = OLD_EMAIL, emailConfirmedAt = NOW)
+        `when`(tokenRepository.findByUserIdAndConsumedAtIsNull(USER_ID)).thenReturn(emptyList())
+
+        service.requestChange(user = user, email = EMAIL)
+
+        assertEquals(EMAIL, sentRecipient)
+        assertEquals(EMAIL, savedToken().email)
+        assertEquals(OLD_EMAIL, user.email, "вход по старой почте, пока ссылка не открыта")
+    }
+
+    @Test
+    fun `the address waiting for a click is shown until it is confirmed or cancelled`() {
+        val user = userEntity(email = OLD_EMAIL, emailConfirmedAt = NOW)
+        val waiting = confirmToken()
+        `when`(tokenRepository.findByUserIdAndConsumedAtIsNull(USER_ID)).thenReturn(listOf(waiting))
+
+        assertEquals(EMAIL, service.pendingEmailOf(user))
+
+        service.cancelChange(user)
+
+        assertEquals(NOW, waiting.consumedAt)
+    }
+
+    @Test
+    fun `an expired letter is not a waiting change`() {
+        val user = userEntity(email = OLD_EMAIL, emailConfirmedAt = NOW)
+        val expired = confirmToken(createdAt = NOW.minusSeconds(CONFIRM_TTL_HOURS * SECONDS_IN_HOUR * 2))
+        `when`(tokenRepository.findByUserIdAndConsumedAtIsNull(USER_ID)).thenReturn(listOf(expired))
+
+        assertNull(service.pendingEmailOf(user))
+    }
+
+    @Test
+    fun `an address confirmed by someone else cannot be asked for`() {
+        val user = userEntity(email = OLD_EMAIL, emailConfirmedAt = NOW)
+        `when`(userRepository.findByEmail(EMAIL)).thenReturn(holderEntity(emailConfirmedAt = NOW))
+
         val rejected = assertFailsWith<ResponseStatusException> {
-            service.confirm(ConfirmEmailRequest(token = CONFIRM_TOKEN))
+            service.requestChange(user = user, email = EMAIL)
         }
 
-        assertEquals(HttpStatus.GONE, rejected.statusCode)
-        assertNull(user.emailConfirmedAt)
+        assertEquals(HttpStatus.CONFLICT, rejected.statusCode)
+        verify(mailService, never()).sendEmailConfirmation(anyNonNull(), anyNonNull())
     }
 
     @Test
