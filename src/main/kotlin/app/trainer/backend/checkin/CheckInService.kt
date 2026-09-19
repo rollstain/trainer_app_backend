@@ -15,10 +15,15 @@ import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.media.MediaOwnerKind
 import app.trainer.backend.media.PrepareUploadRequest
 import app.trainer.backend.media.PrepareUploadResponse
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
+import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -27,6 +32,8 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val AWAITING_CHECK_INS_PER_PAGE = 20
+private const val PUSH_CHECK_IN_DATE_KEY = "checkInDate"
+private val CHECK_IN_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")
 
 @Service
 class CheckInService(
@@ -35,6 +42,7 @@ class CheckInService(
     private val coachClientRepository: CoachClientRepository,
     private val mediaFileService: MediaFileService,
     private val userRepository: UserRepository,
+    private val pushSender: PushSender,
     private val clock: Clock,
 ) {
 
@@ -184,6 +192,15 @@ class CheckInService(
         checkIn.coachComment = request.comment?.trim()?.ifEmpty { null }
         checkIn.reviewedAt = Instant.now(clock)
         checkIn.reviewedByCoachId = coach.id
+        pushSender.send(
+            userIds = listOf(clientUserId),
+            message = PushMessage(
+                channel = PushChannel.CHAT,
+                text = PushText.CHECK_IN_REVIEWED,
+                args = listOf(checkIn.checkInDate.format(CHECK_IN_DATE_FORMAT)),
+                data = mapOf(PUSH_CHECK_IN_DATE_KEY to checkIn.checkInDate.toString()),
+            ),
+        )
         val photos = mediaFileService.filesOf(
             ownerKind = MediaOwnerKind.CHECK_IN,
             ownerIds = listOf(checkIn.id),

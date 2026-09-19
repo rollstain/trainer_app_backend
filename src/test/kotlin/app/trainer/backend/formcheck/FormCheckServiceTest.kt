@@ -10,6 +10,7 @@ import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.media.MediaOwnerKind
+import app.trainer.backend.push.PushSender
 import app.trainer.backend.traininglog.ExerciseRepository
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
@@ -57,6 +58,7 @@ class FormCheckServiceTest {
     private val exerciseRepository = mock(ExerciseRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
     private val mediaFileService = mock(MediaFileService::class.java)
+    private val pushSender = mock(PushSender::class.java)
 
     private val service = FormCheckService(
         formCheckRepository = formCheckRepository,
@@ -65,6 +67,7 @@ class FormCheckServiceTest {
         exerciseRepository = exerciseRepository,
         userRepository = userRepository,
         mediaFileService = mediaFileService,
+        pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
 

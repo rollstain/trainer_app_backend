@@ -14,6 +14,10 @@ import app.trainer.backend.media.MediaFileService
 import app.trainer.backend.media.MediaOwnerKind
 import app.trainer.backend.media.PrepareUploadRequest
 import app.trainer.backend.media.PrepareUploadResponse
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
+import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.traininglog.ExerciseRepository
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
@@ -26,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val FORM_CHECKS_PER_PAGE = 20
+private const val PUSH_FORM_CHECK_ID_KEY = "formCheckId"
 
 @Service
 class FormCheckService(
@@ -35,6 +40,7 @@ class FormCheckService(
     private val exerciseRepository: ExerciseRepository,
     private val userRepository: UserRepository,
     private val mediaFileService: MediaFileService,
+    private val pushSender: PushSender,
     private val clock: Clock,
 ) {
 
@@ -122,6 +128,15 @@ class FormCheckService(
         formCheck.coachComment = request.comment?.trim()?.ifEmpty { null }
         formCheck.reviewedAt = Instant.now(clock)
         formCheck.reviewedByCoachId = coach.id
+        pushSender.send(
+            userIds = listOf(formCheck.clientUserId),
+            message = PushMessage(
+                channel = PushChannel.CHAT,
+                text = PushText.FORM_CHECK_REVIEWED,
+                args = emptyList(),
+                data = mapOf(PUSH_FORM_CHECK_ID_KEY to formCheck.id.toString()),
+            ),
+        )
         return toResponse(formCheck)
     }
 

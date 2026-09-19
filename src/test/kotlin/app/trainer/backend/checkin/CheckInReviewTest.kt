@@ -8,6 +8,7 @@ import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.media.MediaFileService
+import app.trainer.backend.push.PushSender
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
@@ -47,6 +48,7 @@ class CheckInReviewTest {
     private val coachClientRepository = mock(CoachClientRepository::class.java)
 
     private val userRepository = mock(UserRepository::class.java)
+    private val pushSender = mock(PushSender::class.java)
 
     private val service = CheckInService(
         checkInRepository = checkInRepository,
@@ -54,6 +56,7 @@ class CheckInReviewTest {
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
         userRepository = userRepository,
+        pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
 

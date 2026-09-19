@@ -10,6 +10,10 @@ import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.config.pageSizeOf
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
+import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.traininglog.ExerciseEntity
 import app.trainer.backend.traininglog.ExerciseOwnerKind
 import app.trainer.backend.traininglog.ExerciseRepository
@@ -27,6 +31,7 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val DAYS_IN_WEEK = 7
 private const val PROGRAMS_PER_PAGE = 20
+private const val PUSH_PROGRAM_ID_KEY = "programId"
 private const val MAX_PLANNED_RANGE_DAYS = 62L
 
 @Service
@@ -38,6 +43,7 @@ class ProgramService(
     private val exerciseRepository: ExerciseRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
+    private val pushSender: PushSender,
     private val clock: Clock,
 ) {
 
@@ -208,6 +214,15 @@ class ProgramService(
             endedAt = null,
         )
         assignmentRepository.save(assignment)
+        pushSender.send(
+            userIds = listOf(request.clientUserId),
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = PushText.PROGRAM_ASSIGNED,
+                args = listOf(program.title),
+                data = mapOf(PUSH_PROGRAM_ID_KEY to program.id.toString()),
+            ),
+        )
         return clientProgramResponseOf(program = program, assignment = assignment, coachZone = ZoneId.of(coach.zoneId))
     }
 

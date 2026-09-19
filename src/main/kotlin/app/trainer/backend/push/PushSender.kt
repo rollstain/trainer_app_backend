@@ -57,6 +57,60 @@ enum class PushText(
         keptInHistory = true,
         reason = null,
     ),
+    CHECK_IN_REVIEWED(
+        "push.check-in.reviewed.title",
+        "push.check-in.reviewed.body",
+        keptInHistory = true,
+        reason = NotificationReason.COACH_REPLIES,
+    ),
+    FORM_CHECK_REVIEWED(
+        "push.form-check.reviewed.title",
+        "push.form-check.reviewed.body",
+        keptInHistory = true,
+        reason = NotificationReason.COACH_REPLIES,
+    ),
+    RESCHEDULE_REQUESTED(
+        "push.schedule.reschedule-requested.title",
+        "push.schedule.reschedule-requested.body",
+        keptInHistory = true,
+        reason = NotificationReason.SCHEDULE_CHANGES,
+    ),
+    CANCEL_REQUESTED(
+        "push.schedule.cancel-requested.title",
+        "push.schedule.cancel-requested.body",
+        keptInHistory = true,
+        reason = NotificationReason.SCHEDULE_CHANGES,
+    ),
+    RESCHEDULE_APPROVED(
+        "push.schedule.reschedule-approved.title",
+        "push.schedule.reschedule-approved.body",
+        keptInHistory = true,
+        reason = NotificationReason.SCHEDULE_CHANGES,
+    ),
+    RESCHEDULE_DECLINED(
+        "push.schedule.reschedule-declined.title",
+        "push.schedule.reschedule-declined.body",
+        keptInHistory = true,
+        reason = NotificationReason.SCHEDULE_CHANGES,
+    ),
+    CANCEL_APPROVED(
+        "push.schedule.cancel-approved.title",
+        "push.schedule.cancel-approved.body",
+        keptInHistory = true,
+        reason = NotificationReason.SCHEDULE_CHANGES,
+    ),
+    CANCEL_DECLINED(
+        "push.schedule.cancel-declined.title",
+        "push.schedule.cancel-declined.body",
+        keptInHistory = true,
+        reason = NotificationReason.SCHEDULE_CHANGES,
+    ),
+    PROGRAM_ASSIGNED(
+        "push.program.assigned.title",
+        "push.program.assigned.body",
+        keptInHistory = true,
+        reason = NotificationReason.NEW_PROGRAMS,
+    ),
 }
 
 data class PushMessage(

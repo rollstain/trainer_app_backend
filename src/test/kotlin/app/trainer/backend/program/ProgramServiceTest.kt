@@ -5,6 +5,7 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.push.PushSender
 import app.trainer.backend.traininglog.Equipment
 import app.trainer.backend.traininglog.ExerciseEntity
 import app.trainer.backend.traininglog.ExerciseKind
@@ -56,6 +57,7 @@ class ProgramServiceTest {
     private val exerciseRepository = mock(ExerciseRepository::class.java)
     private val coachRepository = mock(CoachRepository::class.java)
     private val coachClientRepository = mock(CoachClientRepository::class.java)
+    private val pushSender = mock(PushSender::class.java)
 
     private val service = serviceAt(NOW)
 
@@ -67,6 +69,7 @@ class ProgramServiceTest {
         exerciseRepository = exerciseRepository,
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
+        pushSender = pushSender,
         clock = Clock.fixed(now, ZoneOffset.UTC),
     )
 
