@@ -34,6 +34,8 @@ spring:
     basename: messages
     encoding: UTF-8
     fallback-to-system-locale: false
+  web:
+    locale: ru
   task:
     execution:
       pool:
