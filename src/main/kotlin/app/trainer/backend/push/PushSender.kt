@@ -111,6 +111,12 @@ enum class PushText(
         keptInHistory = true,
         reason = NotificationReason.NEW_PROGRAMS,
     ),
+    PROGRAM_ENDED(
+        "push.program.ended.title",
+        "push.program.ended.body",
+        keptInHistory = true,
+        reason = NotificationReason.NEW_PROGRAMS,
+    ),
 }
 
 data class PushMessage(

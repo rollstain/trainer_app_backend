@@ -5,7 +5,10 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.traininglog.Equipment
 import app.trainer.backend.traininglog.ExerciseEntity
 import app.trainer.backend.traininglog.ExerciseKind
@@ -263,6 +266,25 @@ class ProgramServiceTest {
         )
 
         assertEquals(NOW, current.endedAt)
+    }
+
+    @Test
+    fun `removing the program tells the client which one is gone`() {
+        givenCoach()
+        givenActiveClient()
+        givenAssignedProgram()
+
+        service.endAssignment(coachUserId = COACH_USER_ID, clientUserId = CLIENT_USER_ID)
+
+        verify(pushSender).send(
+            listOf(CLIENT_USER_ID),
+            PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = PushText.PROGRAM_ENDED,
+                args = listOf("Набор массы"),
+                data = mapOf("programId" to PROGRAM_ID.toString()),
+            ),
+        )
     }
 
     @Test

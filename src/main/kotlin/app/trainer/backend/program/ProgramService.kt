@@ -239,6 +239,16 @@ class ProgramService(
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Программу назначил другой тренер")
         }
         assignment.endedAt = Instant.now(clock)
+        val program = programRepository.findByIdOrNull(assignment.programId) ?: return
+        pushSender.send(
+            userIds = listOf(clientUserId),
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = PushText.PROGRAM_ENDED,
+                args = listOf(program.title),
+                data = mapOf(PUSH_PROGRAM_ID_KEY to program.id.toString()),
+            ),
+        )
     }
 
     @Transactional(readOnly = true)
