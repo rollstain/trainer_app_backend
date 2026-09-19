@@ -33,6 +33,12 @@ enum class PushText(
         keptInHistory = true,
         reason = NotificationReason.SCHEDULE_CHANGES,
     ),
+    SLOT_ASSIGNED(
+        "push.schedule.assigned.title",
+        "push.schedule.assigned.body",
+        keptInHistory = true,
+        reason = NotificationReason.SCHEDULE_CHANGES,
+    ),
     CLIENT_CANCELLED(
         "push.schedule.client-cancelled.title",
         "push.schedule.client-cancelled.body",

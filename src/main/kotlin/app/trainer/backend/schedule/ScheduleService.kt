@@ -193,7 +193,20 @@ class ScheduleService(
             throw ResponseStatusException(HttpStatus.CONFLICT, "Тренировка уже проведена")
         }
         takeSeat(slot = slot, userId = clientUserId)
+        if (slot.startsAt.isAfter(Instant.now(clock))) notifyAssignment(slot = slot, clientUserId = clientUserId)
         return toCoachResponse(slot = slot, pendingRequestId = null)
+    }
+
+    private fun notifyAssignment(slot: TrainingSlotEntity, clientUserId: UUID) {
+        pushSender.send(
+            userIds = listOf(clientUserId),
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = PushText.SLOT_ASSIGNED,
+                args = listOf(seats.timeLabelOf(slot)),
+                data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
+            ),
+        )
     }
 
     @Transactional

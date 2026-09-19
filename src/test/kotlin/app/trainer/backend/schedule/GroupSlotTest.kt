@@ -241,6 +241,36 @@ class GroupSlotTest {
     }
 
     @Test
+    fun `a client the coach signs up hears about it`() {
+        val slot = slot(capacity = GROUP_SEATS)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        val recipients = ArgumentCaptor.forClass(Collection::class.java)
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+
+        service.assignSlot(coachUserId = COACH_USER_ID, slotId = SLOT_ID, clientUserId = SECOND_CLIENT)
+
+        verify(participantRepository).save(anyNonNull())
+        verify(pushSender).send(capturedBy(recipients), capturedBy(message))
+        assertEquals(listOf(SECOND_CLIENT), recipients.value.toList())
+        assertEquals(PushText.SLOT_ASSIGNED, message.value.text)
+        assertEquals(listOf(SLOT_STARTS_AT_IN_COACH_ZONE), message.value.args, "время в поясе тренера")
+        assertEquals(mapOf("slotId" to SLOT_ID.toString()), message.value.data)
+    }
+
+    @Test
+    fun `signing someone up after the session started sends no push`() {
+        val slot = slot(capacity = GROUP_SEATS, startsAt = NOW.minusSeconds(SECONDS_IN_HOUR))
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+
+        service.assignSlot(coachUserId = COACH_USER_ID, slotId = SLOT_ID, clientUserId = SECOND_CLIENT)
+
+        verify(participantRepository).save(anyNonNull())
+        verify(pushSender, never()).send(anyNonNull(), anyNonNull())
+    }
+
+    @Test
     fun `cancelling a session tells everyone who signed up when it was`() {
         val slot = slot(capacity = GROUP_SEATS)
         givenSlot(slot, takenBy = listOf(FIRST_CLIENT, SECOND_CLIENT))
