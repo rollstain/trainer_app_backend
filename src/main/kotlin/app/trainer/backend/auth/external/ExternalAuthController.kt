@@ -6,7 +6,6 @@ import app.trainer.backend.config.CurrentUserId
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import jakarta.validation.Valid
-import java.security.MessageDigest
 import java.util.UUID
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.DeleteMapping
@@ -18,14 +17,11 @@ import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 
-private const val BOT_SECRET_HEADER = "X-Telegram-Bot-Secret"
-private const val BOT_SECRET_MIN_LENGTH = 16
-
 @RestController
 class ExternalAuthController(
     private val externalAuthService: ExternalAuthService,
     private val telegramLoginService: TelegramLoginService,
-    private val telegramProperties: TelegramProperties,
+    private val botGuard: TelegramBotGuard,
     private val authTokensResponder: AuthTokensResponder,
 ) {
 
@@ -34,10 +30,10 @@ class ExternalAuthController(
 
     @PostMapping("/auth/telegram/confirm")
     fun confirmTelegramLogin(
-        @RequestHeader(name = BOT_SECRET_HEADER, required = false) secret: String?,
+        @RequestHeader(name = TELEGRAM_BOT_SECRET_HEADER, required = false) secret: String?,
         @Valid @RequestBody request: TelegramConfirmRequest,
     ): TelegramConfirmResponse {
-        authorizeBot(secret)
+        botGuard.authorize(secret)
         val confirmed = telegramLoginService.confirm(
             startCode = request.startCode,
             telegramUserId = request.telegramUserId,
@@ -83,19 +79,5 @@ class ExternalAuthController(
         @PathVariable provider: ExternalProvider,
     ): List<LinkedIdentityResponse> {
         return externalAuthService.unlink(userId = userId, provider = provider)
-    }
-
-    private fun authorizeBot(secret: String?) {
-        val configured = telegramProperties.botSecret
-        if (configured.length < BOT_SECRET_MIN_LENGTH) {
-            throw ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Бот не настроен")
-        }
-        val matches = MessageDigest.isEqual(
-            secret.orEmpty().toByteArray(Charsets.UTF_8),
-            configured.toByteArray(Charsets.UTF_8),
-        )
-        if (!matches) {
-            throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Бот не опознан")
-        }
     }
 }

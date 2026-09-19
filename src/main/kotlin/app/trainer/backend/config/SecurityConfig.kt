@@ -100,6 +100,7 @@ class SecurityConfig(
                 it.requestMatchers(HttpMethod.GET, "/auth/invites/*").permitAll()
                 it.requestMatchers("/auth/invites/redeem", "/auth/refresh", "/auth/external").permitAll()
                 it.requestMatchers("/auth/telegram/start", "/auth/telegram/confirm").permitAll()
+                it.requestMatchers("/telegram/coach-requests/**").permitAll()
                 it.requestMatchers(
                     "/auth/password/sign-up",
                     "/auth/password/sign-in",
