@@ -135,6 +135,46 @@ class ExerciseVisibilityTest {
     }
 
     @Test
+    fun `an exercise used in a program cannot be hidden`() {
+        val own = exercise(name = "Свой", ownerKind = ExerciseOwnerKind.COACH, ownerId = COACH_ID)
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(exerciseRepository.findById(own.id)).thenReturn(Optional.of(own))
+        `when`(exerciseRepository.countProgramsUsing(COACH_ID, arrayOf(own.id)))
+            .thenReturn(listOf(usage(exerciseId = own.id, programsCount = 2)))
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.archiveExercise(userId = COACH_USER_ID, exerciseId = own.id)
+        }
+
+        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+        assertNull(own.archivedAt)
+    }
+
+    @Test
+    fun `the coach sees in how many programs each exercise is used`() {
+        givenCoachWithClients(CLIENT_USER_ID)
+        val library = givenLibrary()
+        val coachOwn = library.first { it.name == "Тренерское" }
+        `when`(exerciseRepository.countProgramsUsing(anyNonNull(), anyNonNull()))
+            .thenReturn(listOf(usage(exerciseId = coachOwn.id, programsCount = 3)))
+
+        val visible = service.availableExercises(userId = COACH_USER_ID, limit = null, after = null)
+
+        assertEquals(3, visible.items.first { it.id == coachOwn.id }.programsCount)
+        assertEquals(0, visible.items.first { it.name == "Общее" }.programsCount)
+    }
+
+    @Test
+    fun `a client has no programs of their own to count`() {
+        givenClientOfCoach()
+        givenLibrary()
+
+        val visible = service.availableExercises(userId = CLIENT_USER_ID, limit = null, after = null)
+
+        assertTrue(visible.items.all { it.programsCount == 0 })
+    }
+
+    @Test
     fun `a shared exercise belongs to nobody and cannot be hidden`() {
         val shared = exercise(name = "Общее", ownerKind = ExerciseOwnerKind.SHARED, ownerId = null)
         `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
@@ -161,7 +201,7 @@ class ExerciseVisibilityTest {
         assertEquals(HttpStatus.NOT_FOUND, failure.statusCode)
     }
 
-    private fun givenLibrary() {
+    private fun givenLibrary(): List<ExerciseEntity> {
         val library = listOf(
             exercise(name = "Общее", ownerKind = ExerciseOwnerKind.SHARED, ownerId = null),
             exercise(name = "Тренерское", ownerKind = ExerciseOwnerKind.COACH, ownerId = COACH_ID),
@@ -178,6 +218,13 @@ class ExerciseVisibilityTest {
             library.filter { it.ownerKind == ExerciseOwnerKind.SHARED || ownerIds.contains(it.ownerId) }
         }
         `when`(userRepository.findById(anyNonNull())).thenReturn(Optional.of(client()))
+        return library
+    }
+
+    private fun usage(exerciseId: UUID, programsCount: Long): ExerciseUsage = object : ExerciseUsage {
+        override fun getExerciseId(): UUID = exerciseId
+
+        override fun getProgramsCount(): Long = programsCount
     }
 
     private fun exercise(name: String, ownerKind: ExerciseOwnerKind, ownerId: UUID?): ExerciseEntity =

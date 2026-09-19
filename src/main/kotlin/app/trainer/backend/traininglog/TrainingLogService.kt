@@ -66,9 +66,16 @@ class TrainingLogService(
         val exercises = if (pageSize == null) fetched else fetched.take(pageSize)
         val hasMore = pageSize != null && fetched.size > pageSize
         val latestByExercise = setRepository.findLatestPerExercise(userId).associateBy { it.exerciseId }
+        val programsCountByExercise = coachRepository.findByUserId(userId)
+            ?.let { coach -> programsCountByExercise(coachId = coach.id, exerciseIds = exercises.map { it.id }) }
+            .orEmpty()
         return Page(
             items = exercises.map { exercise ->
-                toResponse(exercise = exercise, latest = latestByExercise[exercise.id])
+                toResponse(
+                    exercise = exercise,
+                    latest = latestByExercise[exercise.id],
+                    programsCount = programsCountByExercise[exercise.id] ?: 0,
+                )
             },
             nextCursor = exercises.lastOrNull()
                 ?.takeIf { hasMore }
@@ -99,7 +106,11 @@ class TrainingLogService(
             uploaderUserId = coachUserId,
         )
         exercise.videoMediaFileId = mediaFileId
-        return toResponse(exercise = exercise, video = linked.firstOrNull()?.let(mediaFileService::toResponse))
+        return toResponse(
+            exercise = exercise,
+            video = linked.firstOrNull()?.let(mediaFileService::toResponse),
+            programsCount = programsCountOf(coachId = coach.id, exerciseId = exercise.id),
+        )
     }
 
     @Transactional
@@ -175,7 +186,7 @@ class TrainingLogService(
                 archivedAt = null,
             )
         )
-        return toResponse(exercise)
+        return toResponse(exercise = exercise, programsCount = 0)
     }
 
     @Transactional
@@ -187,8 +198,24 @@ class TrainingLogService(
         if (exercise.ownerKind == ExerciseOwnerKind.SHARED || exercise.ownerId != ownerId) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Упражнение не найдено")
         }
+        if (coach != null && programsCountOf(coachId = coach.id, exerciseId = exercise.id) > 0) {
+            throw ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Упражнение есть в программах — сначала уберите его оттуда",
+            )
+        }
         exercise.archivedAt = Instant.now(clock)
     }
+
+    private fun programsCountByExercise(coachId: UUID, exerciseIds: List<UUID>): Map<UUID, Int> {
+        if (exerciseIds.isEmpty()) return emptyMap()
+        return exerciseRepository
+            .countProgramsUsing(coachId = coachId, exerciseIds = exerciseIds.toTypedArray())
+            .associate { it.getExerciseId() to it.getProgramsCount().toInt() }
+    }
+
+    private fun programsCountOf(coachId: UUID, exerciseId: UUID): Int =
+        programsCountByExercise(coachId = coachId, exerciseIds = listOf(exerciseId))[exerciseId] ?: 0
 
     @Transactional
     fun saveEntry(
@@ -375,6 +402,7 @@ class TrainingLogService(
 
     private fun toResponse(
         exercise: ExerciseEntity,
+        programsCount: Int,
         latest: TrainingLogSetEntity? = null,
         video: MediaFileResponse? = videoOf(exercise),
     ): ExerciseResponse = ExerciseResponse(
@@ -392,6 +420,7 @@ class TrainingLogService(
         lastWeightGrams = latest?.weightGrams,
         lastDurationSeconds = latest?.durationSeconds,
         lastDistanceMeters = latest?.distanceMeters,
+        programsCount = programsCount,
     )
 
     private fun toResponse(
