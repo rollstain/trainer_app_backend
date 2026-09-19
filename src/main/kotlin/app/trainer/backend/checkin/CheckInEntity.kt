@@ -90,6 +90,18 @@ interface CheckInRepository : JpaRepository<CheckInEntity, UUID> {
         @Param("pageSize") pageSize: Int,
     ): List<CheckInEntity>
 
+    @Query(
+        value = """
+            select count(*) from check_ins c
+            join coach_clients l on l.user_id = c.client_user_id
+            where l.coach_id = :coachId
+              and l.status = 'ACTIVE'
+              and c.reviewed_at is null
+        """,
+        nativeQuery = true,
+    )
+    fun countAwaiting(@Param("coachId") coachId: UUID): Long
+
     fun findByClientUserIdAndCheckInDate(clientUserId: UUID, checkInDate: LocalDate): CheckInEntity?
 
     fun findByClientUserIdAndCheckInDateBetweenOrderByCheckInDateDesc(

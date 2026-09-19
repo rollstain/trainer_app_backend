@@ -44,6 +44,7 @@ private val THIRD_FORM_CHECK_ID: UUID = UUID.fromString("80000000-0000-0000-0000
 private val NOW: Instant = Instant.parse("2026-03-02T09:00:00Z")
 private const val PAGE_SIZE = 2
 private const val PAGE_SIZE_WITH_PROBE = PAGE_SIZE + 1
+private const val AWAITING_BEYOND_A_PAGE = 25L
 private const val WINDOW_HOURS = 12
 private const val MORNING_HOUR = 10
 
@@ -171,6 +172,14 @@ class FormCheckServiceTest {
         }
 
         assertEquals(HttpStatus.NOT_FOUND, failure.statusCode)
+    }
+
+    @Test
+    fun `the coach sees how many form checks wait in all`() {
+        givenCoach()
+        `when`(formCheckRepository.countAwaiting(COACH_ID)).thenReturn(AWAITING_BEYOND_A_PAGE)
+
+        assertEquals(AWAITING_BEYOND_A_PAGE.toInt(), service.awaitingCount(COACH_USER_ID))
     }
 
     @Test
