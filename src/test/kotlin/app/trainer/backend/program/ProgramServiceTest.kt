@@ -114,7 +114,6 @@ class ProgramServiceTest {
             clientUserId = CLIENT_USER_ID,
         )
 
-        val startDay = listOf(STARTS_ON.dayOfWeek.value)
         val secondWeekDay = STARTS_ON.plusDays(DAYS_IN_A_WEEK)
         assertEquals(1, program?.daysPerWeek)
         assertEquals(NOW, program?.assignedAt)
@@ -122,14 +121,10 @@ class ProgramServiceTest {
             listOf(
                 ProgramWeekProgressResponse(
                     weekNumber = 1,
-                    daysOfWeek = startDay,
-                    doneCount = 1,
                     days = listOf(legDay(STARTS_ON, isLogged = true)),
                 ),
                 ProgramWeekProgressResponse(
                     weekNumber = 2,
-                    daysOfWeek = startDay,
-                    doneCount = 0,
                     days = listOf(legDay(secondWeekDay, isLogged = false)),
                 ),
             ),
@@ -153,9 +148,7 @@ class ProgramServiceTest {
 
         val program = service.clientProgram(coachUserId = COACH_USER_ID, clientUserId = CLIENT_USER_ID)
 
-        val secondWeek = program?.weeks?.last()
-        assertEquals(0, secondWeek?.doneCount)
-        assertEquals(listOf(legDay(secondWeekDay, isLogged = false)), secondWeek?.days)
+        assertEquals(listOf(legDay(secondWeekDay, isLogged = false)), program?.weeks?.last()?.days)
     }
 
     @Test
