@@ -5,6 +5,9 @@ import app.trainer.backend.auth.external.ExternalIdentityRepository
 import app.trainer.backend.auth.external.ExternalProvider
 import app.trainer.backend.auth.external.VerifiedIdentity
 import app.trainer.backend.auth.external.subjectHashOf
+import app.trainer.backend.push.PushMessage
+import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
@@ -49,12 +52,14 @@ class CoachRequestServiceTest {
     private val userRepository = mock(UserRepository::class.java)
     private val coachRepository = mock(CoachRepository::class.java)
     private val identityRepository = mock(ExternalIdentityRepository::class.java)
+    private val pushSender = mock(PushSender::class.java)
 
     private val service = CoachRequestService(
         requestRepository = requestRepository,
         userRepository = userRepository,
         coachRepository = coachRepository,
         identityRepository = identityRepository,
+        pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
 
@@ -152,6 +157,36 @@ class CoachRequestServiceTest {
 
         assertEquals(CoachRequestStatus.DECLINED, decided.status)
         verify(coachRepository, never()).save(anyNonNull())
+    }
+
+    @Test
+    fun `the asker hears the answer, whatever it is`() {
+        givenUser(ASKER)
+        givenTelegramOf(user = OWNER, telegramUserId = OWNER_TELEGRAM_ID, isOwner = true)
+        `when`(requestRepository.findById(REQUEST_ID))
+            .thenReturn(Optional.of(request(status = CoachRequestStatus.PENDING, decidedAt = null)))
+
+        service.decide(requestId = REQUEST_ID, approve = true, telegramUserId = OWNER_TELEGRAM_ID)
+
+        val recipients = ArgumentCaptor.forClass(Collection::class.java)
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+        verify(pushSender).send(capturedBy(recipients), capturedBy(message))
+        assertEquals(listOf(ASKER), recipients.value.toList())
+        assertEquals(PushText.COACH_REQUEST_APPROVED, message.value.text)
+    }
+
+    @Test
+    fun `a refusal is told too`() {
+        givenUser(ASKER)
+        givenTelegramOf(user = OWNER, telegramUserId = OWNER_TELEGRAM_ID, isOwner = true)
+        `when`(requestRepository.findById(REQUEST_ID))
+            .thenReturn(Optional.of(request(status = CoachRequestStatus.PENDING, decidedAt = null)))
+
+        service.decide(requestId = REQUEST_ID, approve = false, telegramUserId = OWNER_TELEGRAM_ID)
+
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+        verify(pushSender).send(anyNonNull(), capturedBy(message))
+        assertEquals(PushText.COACH_REQUEST_DECLINED, message.value.text)
     }
 
     @Test

@@ -117,6 +117,18 @@ enum class PushText(
         keptInHistory = true,
         reason = NotificationReason.NEW_PROGRAMS,
     ),
+    COACH_REQUEST_APPROVED(
+        "push.coach-request.approved.title",
+        "push.coach-request.approved.body",
+        keptInHistory = true,
+        reason = null,
+    ),
+    COACH_REQUEST_DECLINED(
+        "push.coach-request.declined.title",
+        "push.coach-request.declined.body",
+        keptInHistory = true,
+        reason = null,
+    ),
     PROGRAM_ENDED(
         "push.program.ended.title",
         "push.program.ended.body",
