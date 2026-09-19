@@ -82,6 +82,8 @@ class SlotChangeService(
         if (cancelsNow) {
             seats.free(slot = slot, userId = userId)
             notifyCoachOfCancellation(coach = coach, slot = slot, userId = userId)
+        } else {
+            notifyCoachOfRequest(coach = coach, slot = slot, request = request)
         }
         return toResponse(request = request, slot = slot)
     }
@@ -157,6 +159,7 @@ class SlotChangeService(
         request.resolvedAt = Instant.now(clock)
         request.coachComment = comment?.trim()?.takeIf { it.isNotEmpty() }
         if (approve) applyChange(slot = slot, request = request)
+        notifyRequesterOfDecision(slot = slot, request = request)
         return toResponse(request = request, slot = slot)
     }
 
@@ -223,6 +226,52 @@ class SlotChangeService(
                 userId = userId,
                 createdAt = Instant.now(clock),
             )
+        )
+    }
+
+    private fun notifyCoachOfRequest(coach: CoachEntity, slot: TrainingSlotEntity, request: SlotChangeRequestEntity) {
+        val clientName = userRepository.findByIdOrNull(request.requestedByUserId)?.displayName ?: return
+        val proposed = request.proposedStartsAt
+        val requested = if (request.kind == SlotChangeKind.RESCHEDULE && proposed != null) {
+            PushText.RESCHEDULE_REQUESTED to listOf(
+                clientName,
+                seats.timeLabelOf(slot),
+                seats.timeLabelAt(coachId = slot.coachId, startsAt = proposed),
+            )
+        } else {
+            PushText.CANCEL_REQUESTED to listOf(clientName, seats.timeLabelOf(slot))
+        }
+        pushSender.send(
+            userIds = listOf(coach.userId),
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = requested.first,
+                args = requested.second,
+                data = mapOf(PUSH_SLOT_ID_KEY to slot.id.toString()),
+            ),
+        )
+    }
+
+    private fun notifyRequesterOfDecision(slot: TrainingSlotEntity, request: SlotChangeRequestEntity) {
+        val approved = request.status == SlotChangeStatus.APPROVED
+        val movedTo = request.proposedStartsAt?.takeIf { approved && request.kind == SlotChangeKind.RESCHEDULE }
+        val text = when (request.kind) {
+            SlotChangeKind.RESCHEDULE -> if (approved) PushText.RESCHEDULE_APPROVED else PushText.RESCHEDULE_DECLINED
+            SlotChangeKind.CANCEL -> if (approved) PushText.CANCEL_APPROVED else PushText.CANCEL_DECLINED
+        }
+        pushSender.send(
+            userIds = listOf(request.requestedByUserId),
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = text,
+                args = listOf(
+                    seats.timeLabelAt(
+                        coachId = slot.coachId,
+                        startsAt = movedTo ?: request.originalStartsAt ?: slot.startsAt,
+                    )
+                ),
+                data = mapOf(PUSH_SLOT_ID_KEY to request.slotId.toString()),
+            ),
         )
     }
 

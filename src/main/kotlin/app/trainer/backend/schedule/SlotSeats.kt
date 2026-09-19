@@ -32,10 +32,12 @@ class SlotSeats(
         notifyWaitlist(slot)
     }
 
-    fun timeLabelOf(slot: TrainingSlotEntity): String {
-        val coach = coachRepository.findByIdOrNull(slot.coachId)
+    fun timeLabelOf(slot: TrainingSlotEntity): String = timeLabelAt(coachId = slot.coachId, startsAt = slot.startsAt)
+
+    fun timeLabelAt(coachId: UUID, startsAt: Instant): String {
+        val coach = coachRepository.findByIdOrNull(coachId)
         val zone = coach?.zoneId?.let { zoneId -> runCatching { ZoneId.of(zoneId) }.getOrNull() } ?: ZoneOffset.UTC
-        return slot.startsAt.atZone(zone).format(SLOT_TIME_FORMAT)
+        return startsAt.atZone(zone).format(SLOT_TIME_FORMAT)
     }
 
     private fun notifyWaitlist(slot: TrainingSlotEntity) {

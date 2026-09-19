@@ -120,7 +120,21 @@ class ChangeRequestTest {
 
         assertEquals(SlotChangeStatus.PENDING, request.status)
         verify(participantRepository, never()).delete(seat)
-        verify(pushSender, never()).send(anyNonNull(), anyNonNull())
+        val pushed = ArgumentCaptor.forClass(PushMessage::class.java)
+        verify(pushSender).send(anyNonNull(), capturedBy(pushed))
+        assertEquals(PushText.CANCEL_REQUESTED, pushed.value.text)
+        assertEquals(CLIENT_NAME, pushed.value.args.first())
+    }
+
+    @Test
+    fun `the client hears how the coach answered`() {
+        givenPendingReschedule(slot(startsAt = AHEAD_OF_WINDOW))
+
+        changes.resolveChange(coachUserId = COACH_USER_ID, requestId = REQUEST_ID, approve = false, comment = null)
+
+        val pushed = ArgumentCaptor.forClass(PushMessage::class.java)
+        verify(pushSender).send(anyNonNull(), capturedBy(pushed))
+        assertEquals(PushText.RESCHEDULE_DECLINED, pushed.value.text)
     }
 
     @Test

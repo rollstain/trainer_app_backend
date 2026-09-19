@@ -39,17 +39,17 @@ class PushConfig {
 
     @Bean
     @ConditionalOnExpression(CONFIGURED_CREDENTIALS_EXPRESSION)
-    fun fcmPushSender(
+    fun fcmPushDelivery(
         messaging: FirebaseMessaging,
         tokenRepository: PushTokenRepository,
         pushTexts: PushTexts,
-    ): PushSender = FcmPushSender(
+    ): PushDelivery = FcmPushDelivery(
         messaging = messaging,
         tokenRepository = tokenRepository,
         pushTexts = pushTexts,
     )
 
     @Bean
-    @ConditionalOnMissingBean(PushSender::class)
-    fun noOpPushSender(): PushSender = NoOpPushSender()
+    @ConditionalOnMissingBean(PushDelivery::class)
+    fun noOpPushDelivery(): PushDelivery = NoOpPushDelivery()
 }
