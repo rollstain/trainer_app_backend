@@ -144,6 +144,16 @@ class ProgramService(
     }
 
     @Transactional
+    fun rename(coachUserId: UUID, programId: UUID, request: RenameProgramRequest): ProgramResponse {
+        val coach = requireCoach(coachUserId)
+        val program = requireOwnProgram(coach = coach, programId = programId)
+        program.title = request.title.trim()
+        val days = dayRepository.findByProgramIdOrderByWeekNumberAscDayOfWeekAsc(program.id)
+        val lines = exerciseLineRepository.findByProgramDayIdInOrderByPositionAsc(days.map { it.id })
+        return toResponse(program = program, days = days, lines = lines)
+    }
+
+    @Transactional
     fun saveDay(coachUserId: UUID, programId: UUID, request: SaveProgramDayRequest): ProgramResponse {
         val coach = requireCoach(coachUserId)
         val program = requireOwnProgram(coach = coach, programId = programId)

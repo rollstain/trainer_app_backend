@@ -263,6 +263,22 @@ class ProgramServiceTest {
     }
 
     @Test
+    fun `a program is renamed without the spaces around its title`() {
+        givenCoach()
+        val renamed = program()
+        `when`(programRepository.findById(PROGRAM_ID)).thenReturn(Optional.of(renamed))
+
+        val response = service.rename(
+            coachUserId = COACH_USER_ID,
+            programId = PROGRAM_ID,
+            request = RenameProgramRequest(title = "  Сила, весна  "),
+        )
+
+        assertEquals("Сила, весна", renamed.title)
+        assertEquals("Сила, весна", response.title)
+    }
+
+    @Test
     fun `archiving a program ends the assignments that used it`() {
         givenCoach()
         val archived = program()

@@ -67,6 +67,12 @@ data class DuplicateProgramRequest(
     val title: String,
 )
 
+data class RenameProgramRequest(
+    @field:NotBlank
+    @field:Size(max = MAX_TITLE_LENGTH)
+    val title: String,
+)
+
 data class ProgramExerciseRequest(
     val exerciseId: UUID,
     @field:Min(MIN_SETS)
