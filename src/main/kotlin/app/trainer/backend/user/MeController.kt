@@ -6,7 +6,8 @@ import app.trainer.backend.auth.password.normalizedEmailOrNull
 import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
-import app.trainer.backend.coach.CoachSignUpService
+import app.trainer.backend.coach.CoachRequestService
+import app.trainer.backend.coach.CoachRequestStatusResponse
 import app.trainer.backend.config.CurrentUserId
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Size
@@ -35,6 +36,7 @@ data class MeResponse(
     val zoneId: String?,
     val hasCoach: Boolean,
     val isOwner: Boolean,
+    val coachRequest: CoachRequestStatusResponse?,
 )
 
 data class BecomeCoachRequest(
@@ -55,7 +57,7 @@ class MeController(
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
     private val passwordStore: PasswordStore,
-    private val coachSignUpService: CoachSignUpService,
+    private val coachRequestService: CoachRequestService,
     private val emailConfirmationService: EmailConfirmationService,
 ) {
 
@@ -114,7 +116,7 @@ class MeController(
         @CurrentUserId userId: UUID,
         @Valid @RequestBody request: BecomeCoachRequest,
     ): MeResponse {
-        coachSignUpService.signUp(
+        coachRequestService.ask(
             userId = userId,
             displayName = request.displayName,
             zoneId = request.zoneId,
@@ -147,6 +149,7 @@ class MeController(
                 .findByUserId(user.id)
                 .any { it.status == CoachClientStatus.ACTIVE },
             isOwner = user.isOwner,
+            coachRequest = coachRequestService.statusOf(user.id),
         )
     }
 }
