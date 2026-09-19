@@ -115,15 +115,47 @@ class ProgramServiceTest {
         )
 
         val startDay = listOf(STARTS_ON.dayOfWeek.value)
+        val secondWeekDay = STARTS_ON.plusDays(DAYS_IN_A_WEEK)
         assertEquals(1, program?.daysPerWeek)
         assertEquals(NOW, program?.assignedAt)
         assertEquals(
             listOf(
-                ProgramWeekProgressResponse(weekNumber = 1, daysOfWeek = startDay, doneCount = 1),
-                ProgramWeekProgressResponse(weekNumber = 2, daysOfWeek = startDay, doneCount = 0),
+                ProgramWeekProgressResponse(
+                    weekNumber = 1,
+                    daysOfWeek = startDay,
+                    doneCount = 1,
+                    days = listOf(legDay(STARTS_ON, isLogged = true)),
+                ),
+                ProgramWeekProgressResponse(
+                    weekNumber = 2,
+                    daysOfWeek = startDay,
+                    doneCount = 0,
+                    days = listOf(legDay(secondWeekDay, isLogged = false)),
+                ),
             ),
             program?.weeks,
         )
+    }
+
+    @Test
+    fun `a day logged ahead of time is not counted as done until it comes`() {
+        givenCoach()
+        givenActiveClient()
+        givenAssignedProgram()
+        val secondWeekDay = STARTS_ON.plusDays(DAYS_IN_A_WEEK)
+        `when`(
+            entryRepository.findByClientUserIdAndEntryDateBetweenOrderByEntryDateDesc(
+                CLIENT_USER_ID,
+                STARTS_ON,
+                STARTS_ON.plusDays(WEEKS_IN_PROGRAM * DAYS_IN_A_WEEK - 1),
+            )
+        ).thenReturn(listOf(entryOn(secondWeekDay)))
+
+        val program = service.clientProgram(coachUserId = COACH_USER_ID, clientUserId = CLIENT_USER_ID)
+
+        val secondWeek = program?.weeks?.last()
+        assertEquals(0, secondWeek?.doneCount)
+        assertEquals(listOf(legDay(secondWeekDay, isLogged = false)), secondWeek?.days)
     }
 
     @Test
@@ -512,6 +544,13 @@ class ProgramServiceTest {
         weightGrams = null,
         restSeconds = null,
         note = null,
+    )
+
+    private fun legDay(date: LocalDate, isLogged: Boolean) = ProgramWeekDayResponse(
+        date = date,
+        title = "День ног",
+        exercisesCount = 1,
+        isLogged = isLogged,
     )
 
     private fun entryOn(date: LocalDate): TrainingLogEntryEntity = TrainingLogEntryEntity(
