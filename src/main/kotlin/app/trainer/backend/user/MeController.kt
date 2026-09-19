@@ -17,6 +17,7 @@ import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -30,6 +31,7 @@ data class MeResponse(
     val phone: String?,
     val email: String?,
     val emailConfirmed: Boolean,
+    val pendingEmail: String?,
     val login: String?,
     val hasPassword: Boolean,
     val passwordUpdatedAt: Instant?,
@@ -50,6 +52,12 @@ data class RenameMeRequest(
     @field:NotBlank
     @field:Size(max = DISPLAY_NAME_MAX_LENGTH, message = DISPLAY_NAME_TOO_LONG)
     val displayName: String,
+)
+
+data class ChangeEmailRequest(
+    @field:NotBlank
+    val email: String,
+    val currentPassword: String?,
 )
 
 data class UpdateContactRequest(
@@ -110,6 +118,30 @@ class MeController(
         return toResponse(user)
     }
 
+    @PostMapping("/me/email/change")
+    @Transactional
+    fun changeEmail(
+        @CurrentUserId userId: UUID,
+        @Valid @RequestBody request: ChangeEmailRequest,
+    ): MeResponse {
+        val user = userRepository.findByIdOrNull(userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден")
+        val email = normalizedEmailOrNull(request.email.trim())
+            ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Проверьте адрес почты")
+        requireCurrentPassword(userId = userId, provided = request.currentPassword)
+        emailConfirmationService.requestChange(user = user, email = email)
+        return toResponse(user)
+    }
+
+    @DeleteMapping("/me/email/change")
+    @Transactional
+    fun cancelEmailChange(@CurrentUserId userId: UUID): MeResponse {
+        val user = userRepository.findByIdOrNull(userId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден")
+        emailConfirmationService.cancelChange(user)
+        return toResponse(user)
+    }
+
     private fun requireCurrentPassword(userId: UUID, provided: String?) {
         val credential = passwordStore.credentialOf(userId) ?: return
         val matches = provided != null && passwordStore.matches(credential = credential, password = provided)
@@ -159,6 +191,7 @@ class MeController(
             phone = user.phone,
             email = user.email,
             emailConfirmed = user.emailConfirmedAt != null,
+            pendingEmail = emailConfirmationService.pendingEmailOf(user),
             login = user.login,
             hasPassword = credential != null,
             passwordUpdatedAt = credential?.updatedAt,

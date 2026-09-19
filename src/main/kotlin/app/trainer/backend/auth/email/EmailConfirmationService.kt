@@ -35,6 +35,7 @@ class EmailConfirmationService(
     private val encoder: Base64.Encoder = Base64.getUrlEncoder().withoutPadding()
 
     fun beginQuietly(user: UserEntity, email: String) {
+        retireLinks(user.id)
         if (!mailService.isConfigured) return
         val link = issueLink(user = user, email = email)
         runCatching { mailService.sendEmailConfirmation(recipient = email, link = link) }
@@ -59,6 +60,39 @@ class EmailConfirmationService(
     }
 
     @Transactional
+    fun requestChange(user: UserEntity, email: String) {
+        if (email == user.email) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Это и есть ваша почта")
+        }
+        val holder = userRepository.findByEmail(email)
+        if (holder != null && holder.id != user.id && holder.emailConfirmedAt != null) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Эта почта уже занята")
+        }
+        val now = Instant.now(clock)
+        tokenRepository.findByUserIdAndConsumedAtIsNull(user.id)
+            .firstOrNull { justSent(token = it, now = now) }
+            ?.let { throw tooEarlyToResend(token = it, now = now) }
+
+        mailService.sendEmailConfirmation(recipient = email, link = issueLink(user = user, email = email))
+    }
+
+    fun pendingEmailOf(user: UserEntity): String? {
+        val now = Instant.now(clock)
+        return tokenRepository.findByUserIdAndConsumedAtIsNull(user.id)
+            .filter { it.email != user.email && it.expiresAt.isAfter(now) }
+            .maxByOrNull { it.createdAt }
+            ?.email
+    }
+
+    @Transactional
+    fun cancelChange(user: UserEntity) {
+        val now = Instant.now(clock)
+        tokenRepository.findByUserIdAndConsumedAtIsNull(user.id)
+            .filter { it.email != user.email }
+            .forEach { it.consumedAt = now }
+    }
+
+    @Transactional
     fun confirm(request: ConfirmEmailRequest) {
         val now = Instant.now(clock)
         val token = tokenRepository.findByTokenHash(hashOf(request.token))
@@ -73,10 +107,7 @@ class EmailConfirmationService(
 
         val user = userRepository.findByIdOrNull(token.userId)
             ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Пользователь не найден")
-        if (user.email != null && user.email != token.email) {
-            throw ResponseStatusException(HttpStatus.GONE, "У аккаунта уже другая почта")
-        }
-        if (user.email == null) {
+        if (user.email != token.email) {
             if (!freeUnconfirmedHolder(email = token.email, ownerId = user.id)) {
                 throw ResponseStatusException(HttpStatus.CONFLICT, "Эта почта уже подтверждена в другом аккаунте")
             }
@@ -95,9 +126,14 @@ class EmailConfirmationService(
         return true
     }
 
+    private fun retireLinks(userId: UUID) {
+        val now = Instant.now(clock)
+        tokenRepository.findByUserIdAndConsumedAtIsNull(userId).forEach { it.consumedAt = now }
+    }
+
     private fun issueLink(user: UserEntity, email: String): String {
         val now = Instant.now(clock)
-        tokenRepository.findByUserIdAndConsumedAtIsNull(user.id).forEach { it.consumedAt = now }
+        retireLinks(user.id)
         val token = randomToken()
         tokenRepository.save(
             EmailConfirmationTokenEntity(
