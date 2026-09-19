@@ -47,6 +47,13 @@ class CheckInService(
 ) {
 
     @Transactional(readOnly = true)
+    fun awaitingCount(coachUserId: UUID): Int {
+        val coach = coachRepository.findByUserId(coachUserId)
+            ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не тренер")
+        return checkInRepository.countAwaiting(coach.id).toInt()
+    }
+
+    @Transactional(readOnly = true)
     fun awaitingReview(coachUserId: UUID, limit: Int?, after: String?): Page<AwaitingCheckInResponse> {
         val coach = coachRepository.findByUserId(coachUserId)
             ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Пользователь не тренер")

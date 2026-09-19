@@ -88,4 +88,14 @@ interface FormCheckRepository : JpaRepository<FormCheckEntity, UUID> {
         @Param("afterId") afterId: UUID?,
         @Param("pageSize") pageSize: Int,
     ): List<FormCheckEntity>
+
+    @Query(
+        value = """
+            select count(*) from form_checks f
+            where f.coach_id = :coachId
+              and f.reviewed_at is null
+        """,
+        nativeQuery = true,
+    )
+    fun countAwaiting(@Param("coachId") coachId: UUID): Long
 }

@@ -95,6 +95,9 @@ class FormCheckService(
     }
 
     @Transactional(readOnly = true)
+    fun awaitingCount(coachUserId: UUID): Int = formCheckRepository.countAwaiting(requireCoach(coachUserId).id).toInt()
+
+    @Transactional(readOnly = true)
     fun awaitingReview(coachUserId: UUID, limit: Int?, after: String?): Page<FormCheckResponse> {
         val coach = requireCoach(coachUserId)
         val pageSize = pageSizeOf(limit) ?: FORM_CHECKS_PER_PAGE
