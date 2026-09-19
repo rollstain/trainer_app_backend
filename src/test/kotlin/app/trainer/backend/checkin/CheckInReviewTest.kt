@@ -39,6 +39,7 @@ private const val CANCELLATION_WINDOW_HOURS = 12
 private const val REMINDER_HOUR = 10
 private const val PAGE_SIZE = 2
 private const val PAGE_SIZE_WITH_PROBE = PAGE_SIZE + 1
+private const val AWAITING_BEYOND_A_PAGE = 25L
 
 class CheckInReviewTest {
 
@@ -89,6 +90,14 @@ class CheckInReviewTest {
             PageCursor(sortKey = CHECK_IN_DATE.toString(), id = OTHER_CHECK_IN_ID),
             decodeCursor(awaiting.nextCursor),
         )
+    }
+
+    @Test
+    fun `the coach sees how many check-ins wait in all, not just on the first page`() {
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(checkInRepository.countAwaiting(COACH_ID)).thenReturn(AWAITING_BEYOND_A_PAGE)
+
+        assertEquals(AWAITING_BEYOND_A_PAGE.toInt(), service.awaitingCount(COACH_USER_ID))
     }
 
     @Test
