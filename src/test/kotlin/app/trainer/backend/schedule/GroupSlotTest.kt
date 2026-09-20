@@ -271,6 +271,45 @@ class GroupSlotTest {
     }
 
     @Test
+    fun `nobody signs up for a session that has already started`() {
+        val slot = slot(capacity = GROUP_SEATS, startsAt = NOW.minusSeconds(SECONDS_IN_HOUR))
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.book(userId = SECOND_CLIENT, slotId = SLOT_ID)
+        }
+
+        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+        verify(participantRepository, never()).save(anyNonNull())
+    }
+
+    @Test
+    fun `a session that has already started is not offered as free`() {
+        val slot = slot(capacity = SINGLE_SEAT, startsAt = NOW.minusSeconds(SECONDS_IN_HOUR))
+        `when`(coachRepository.findById(COACH_ID)).thenReturn(Optional.of(coach()))
+        givenActiveClient(FIRST_CLIENT)
+        `when`(
+            slotRepository.findByCoachIdAndStartsAtBetweenOrderByStartsAtAsc(
+                anyNonNull(),
+                anyNonNull(),
+                anyNonNull(),
+            )
+        ).thenReturn(listOf(slot))
+        `when`(changeRequestRepository.findBySlotIdInAndStatus(anyNonNull(), anyNonNull())).thenReturn(emptyList())
+        `when`(participantRepository.findBySlotIdIn(anyNonNull())).thenReturn(emptyList())
+        `when`(waitlistRepository.findBySlotIdInAndUserId(anyNonNull(), anyNonNull())).thenReturn(emptyList())
+
+        val schedule = service.clientSchedule(
+            userId = FIRST_CLIENT,
+            coachId = COACH_ID,
+            from = NOW.minusSeconds(SECONDS_IN_HOUR),
+            to = SLOT_STARTS_AT,
+        )
+
+        assertFalse(schedule.slots.single().isAvailable)
+    }
+
+    @Test
     fun `cancelling a session tells everyone who signed up when it was`() {
         val slot = slot(capacity = GROUP_SEATS)
         givenSlot(slot, takenBy = listOf(FIRST_CLIENT, SECOND_CLIENT))

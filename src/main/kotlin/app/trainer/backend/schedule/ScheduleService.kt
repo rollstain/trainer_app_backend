@@ -284,6 +284,9 @@ class ScheduleService(
     fun book(userId: UUID, slotId: UUID): ClientSlotResponse {
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
         requireActiveCoachClient(coachId = slot.coachId, userId = userId)
+        if (!startsInFuture(slot)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Это занятие уже прошло")
+        }
         takeSeat(slot = slot, userId = userId)
         val entry = waitlistRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId)
         if (entry != null) waitlistRepository.delete(entry)
@@ -294,6 +297,9 @@ class ScheduleService(
     fun joinWaitlist(userId: UUID, slotId: UUID): ClientSlotResponse {
         val slot = slotRepository.findByIdOrNull(slotId) ?: slotNotFound()
         requireActiveCoachClient(coachId = slot.coachId, userId = userId)
+        if (!startsInFuture(slot)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Это занятие уже прошло")
+        }
         if (statusOf(slot = slot, takenSeats = seatsTakenIn(slot.id)) == SlotStatus.FREE) {
             throw ResponseStatusException(HttpStatus.CONFLICT, "Свободные места есть, можно записаться сразу")
         }
@@ -384,6 +390,8 @@ class ScheduleService(
         SlotLifecycle.COMPLETED -> SlotStatus.COMPLETED
         SlotLifecycle.SCHEDULED -> if (takenSeats < slot.capacity) SlotStatus.FREE else SlotStatus.BOOKED
     }
+
+    private fun startsInFuture(slot: TrainingSlotEntity): Boolean = slot.startsAt.isAfter(Instant.now(clock))
 
     private fun takeSeat(slot: TrainingSlotEntity, userId: UUID) {
         if (slot.lifecycle != SlotLifecycle.SCHEDULED) {
@@ -481,7 +489,8 @@ class ScheduleService(
             startsAt = slot.startsAt,
             durationMinutes = slot.durationMinutes,
             isBookedByMe = isMine,
-            isAvailable = statusOf(slot = slot, takenSeats = takenSeats) == SlotStatus.FREE,
+            isAvailable = statusOf(slot = slot, takenSeats = takenSeats) == SlotStatus.FREE &&
+                startsInFuture(slot),
             pendingChangeRequestId = if (isMine) pendingBySlot[slot.id] else null,
             changeRequest = if (isMine) latestRequest?.let(::toClientChangeResponse) else null,
             canRequestChange = isMine && isBeforeChangeDeadline(
