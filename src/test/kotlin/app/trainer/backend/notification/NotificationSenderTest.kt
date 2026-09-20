@@ -92,6 +92,25 @@ class NotificationSenderTest {
     }
 
     @Test
+    fun `a check-in waits for the daily digest instead of its own push`() {
+        sender.send(userIds = listOf(ANNA), message = message(PushText.NEW_CHECK_IN))
+
+        assertEquals(listOf(ANNA), keptNotifications().map { it.userId })
+        verify(delivery, never()).send(anyNonNull(), anyNonNull())
+        verifyNoInteractions(settingRepository)
+    }
+
+    @Test
+    fun `the digest itself goes out and is not kept twice`() {
+        val digest = message(PushText.CHECK_INS_WAITING)
+
+        sender.send(userIds = listOf(ANNA), message = digest)
+
+        verifyNoInteractions(notificationRepository)
+        verify(delivery).send(listOf(ANNA), digest)
+    }
+
+    @Test
     fun `chat messages are delivered but not kept, the chat is their history`() {
         val chat = message(PushText.NEW_CHAT_MESSAGE)
 
