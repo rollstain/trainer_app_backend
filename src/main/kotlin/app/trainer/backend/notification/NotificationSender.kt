@@ -22,6 +22,7 @@ class NotificationSender(
         val recipients = userIds.distinct()
         if (recipients.isEmpty()) return
         if (message.text.keptInHistory) keep(recipients = recipients, message = message)
+        if (message.text.collapsesIntoDigest) return
         val muted = message.text.reason
             ?.let { reason ->
                 settingRepository

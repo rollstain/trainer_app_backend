@@ -71,6 +71,7 @@ class NotificationService(
                 reason = reason,
                 pushEnabled = if (reason.canTurnOff) chosen[reason]?.pushEnabled ?: true else true,
                 canTurnOff = reason.canTurnOff,
+                delivery = reason.delivery,
             )
         }
     }
