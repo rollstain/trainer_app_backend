@@ -290,6 +290,7 @@ class ScheduleService(
         takeSeat(slot = slot, userId = userId)
         val entry = waitlistRepository.findBySlotIdAndUserId(slotId = slot.id, userId = userId)
         if (entry != null) waitlistRepository.delete(entry)
+        seats.notifyCoachOfBooking(slot = slot, clientUserId = userId)
         return clientResponseOf(slot = slot, userId = userId)
     }
 

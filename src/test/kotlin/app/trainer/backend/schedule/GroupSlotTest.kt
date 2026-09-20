@@ -67,6 +67,7 @@ class GroupSlotTest {
         participantRepository = participantRepository,
         waitlistRepository = waitlistRepository,
         coachRepository = coachRepository,
+        userRepository = userRepository,
         pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
@@ -104,6 +105,23 @@ class GroupSlotTest {
 
         assertEquals(GROUP_SEATS, booked.capacity)
         verify(participantRepository).save(anyNonNull())
+    }
+
+    @Test
+    fun `the coach hears that a free slot is taken`() {
+        val slot = slot(capacity = SINGLE_SEAT)
+        givenSlot(slot, takenBy = emptyList())
+        `when`(userRepository.findById(FIRST_CLIENT)).thenReturn(Optional.of(user(FIRST_CLIENT)))
+        `when`(coachRepository.findById(COACH_ID)).thenReturn(Optional.of(coach()))
+        val recipients = ArgumentCaptor.forClass(Collection::class.java)
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+
+        service.book(userId = FIRST_CLIENT, slotId = SLOT_ID)
+
+        verify(pushSender).send(capturedBy(recipients), capturedBy(message))
+        assertEquals(listOf(COACH_USER_ID), recipients.value.toList())
+        assertEquals(PushText.SLOT_BOOKED, message.value.text)
+        assertEquals(listOf("Анна", SLOT_STARTS_AT_IN_COACH_ZONE), message.value.args)
     }
 
     @Test

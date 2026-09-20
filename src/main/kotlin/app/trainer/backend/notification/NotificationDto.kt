@@ -22,6 +22,7 @@ data class UnreadNotificationsResponse(
 data class NotificationSettingResponse(
     val reason: NotificationReason,
     val pushEnabled: Boolean,
+    val canTurnOff: Boolean,
 )
 
 data class UpdateNotificationSettingRequest(

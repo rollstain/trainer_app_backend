@@ -31,6 +31,7 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val FORM_CHECKS_PER_PAGE = 20
 private const val PUSH_FORM_CHECK_ID_KEY = "formCheckId"
+private const val PUSH_CLIENT_USER_ID_KEY = "clientUserId"
 
 @Service
 class FormCheckService(
@@ -78,7 +79,24 @@ class FormCheckService(
             uploaderUserId = clientUserId,
         )
         formCheckRepository.save(formCheck)
+        notifyCoachOfFormCheck(coach = coach, formCheck = formCheck)
         return toResponse(formCheck)
+    }
+
+    private fun notifyCoachOfFormCheck(coach: CoachEntity, formCheck: FormCheckEntity) {
+        val clientName = userRepository.findByIdOrNull(formCheck.clientUserId)?.displayName ?: return
+        pushSender.send(
+            userIds = listOf(coach.userId),
+            message = PushMessage(
+                channel = PushChannel.CHAT,
+                text = PushText.NEW_FORM_CHECK,
+                args = listOf(clientName),
+                data = mapOf(
+                    PUSH_FORM_CHECK_ID_KEY to formCheck.id.toString(),
+                    PUSH_CLIENT_USER_ID_KEY to formCheck.clientUserId.toString(),
+                ),
+            ),
+        )
     }
 
     @Transactional(readOnly = true)

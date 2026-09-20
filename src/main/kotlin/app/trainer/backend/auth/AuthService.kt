@@ -5,6 +5,10 @@ import app.trainer.backend.coach.CoachClientEntity
 import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
+import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
@@ -16,6 +20,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
+private const val PUSH_CLIENT_USER_ID_KEY = "clientUserId"
+
 @Service
 class AuthService(
     private val inviteRepository: InviteRepository,
@@ -23,6 +29,7 @@ class AuthService(
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
     private val chatService: ChatService,
+    private val pushSender: PushSender,
     private val sessionOpener: SessionOpener,
     private val inviteCodeGenerator: InviteCodeGenerator,
     private val properties: AuthProperties,
@@ -103,9 +110,28 @@ class AuthService(
                 )
             )
             chatService.openDialog(coachId = invite.coachId, clientUserId = userId)
+            notifyCoachOfNewClient(
+                coachId = invite.coachId,
+                clientUserId = userId,
+                clientName = userRepository.findById(userId).orElse(null)?.displayName,
+            )
         }
         invite.usedAt = now
         invite.usedByUserId = userId
+    }
+
+    private fun notifyCoachOfNewClient(coachId: UUID, clientUserId: UUID, clientName: String?) {
+        val name = clientName ?: return
+        val coach = coachRepository.findById(coachId).orElse(null) ?: return
+        pushSender.send(
+            userIds = listOf(coach.userId),
+            message = PushMessage(
+                channel = PushChannel.CHAT,
+                text = PushText.NEW_CLIENT,
+                args = listOf(name),
+                data = mapOf(PUSH_CLIENT_USER_ID_KEY to clientUserId.toString()),
+            ),
+        )
     }
 
     private fun requireUsableInvite(code: String, now: Instant): InviteEntity {
@@ -146,6 +172,7 @@ class AuthService(
             )
         )
         chatService.openDialog(coachId = invite.coachId, clientUserId = user.id)
+        notifyCoachOfNewClient(coachId = invite.coachId, clientUserId = user.id, clientName = name)
         return user.id
     }
 }

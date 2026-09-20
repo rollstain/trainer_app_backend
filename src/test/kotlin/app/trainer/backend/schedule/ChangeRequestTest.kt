@@ -70,6 +70,7 @@ class ChangeRequestTest {
         participantRepository = participantRepository,
         waitlistRepository = waitlistRepository,
         coachRepository = coachRepository,
+        userRepository = userRepository,
         pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )

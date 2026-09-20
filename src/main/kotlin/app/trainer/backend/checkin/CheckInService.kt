@@ -33,6 +33,7 @@ import org.springframework.web.server.ResponseStatusException
 
 private const val AWAITING_CHECK_INS_PER_PAGE = 20
 private const val PUSH_CHECK_IN_DATE_KEY = "checkInDate"
+private const val PUSH_CLIENT_USER_ID_KEY = "clientUserId"
 private val CHECK_IN_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")
 
 @Service
@@ -89,10 +90,11 @@ class CheckInService(
     @Transactional
     fun save(clientUserId: UUID, checkInDate: LocalDate, request: SaveCheckInRequest): CheckInResponse {
         val now = Instant.now(clock)
-        val checkIn = checkInRepository.findByClientUserIdAndCheckInDate(
+        val known = checkInRepository.findByClientUserIdAndCheckInDate(
             clientUserId = clientUserId,
             checkInDate = checkInDate,
-        ) ?: checkInRepository.save(
+        )
+        val checkIn = known ?: checkInRepository.save(
             CheckInEntity(
                 id = UUID.randomUUID(),
                 clientUserId = clientUserId,
@@ -129,7 +131,33 @@ class CheckInService(
             scopeId = clientUserId,
             uploaderUserId = clientUserId,
         )
+        if (known == null) notifyCoachOfCheckIn(clientUserId = clientUserId, checkInDate = checkInDate)
         return toResponse(checkIn = checkIn, photos = photos.map(mediaFileService::toResponse))
+    }
+
+    private fun notifyCoachOfCheckIn(clientUserId: UUID, checkInDate: LocalDate) {
+        val coach = activeCoachOf(clientUserId) ?: return
+        val clientName = userRepository.findByIdOrNull(clientUserId)?.displayName ?: return
+        pushSender.send(
+            userIds = listOf(coach.userId),
+            message = PushMessage(
+                channel = PushChannel.CHAT,
+                text = PushText.NEW_CHECK_IN,
+                args = listOf(clientName, checkInDate.format(CHECK_IN_DATE_FORMAT)),
+                data = mapOf(
+                    PUSH_CLIENT_USER_ID_KEY to clientUserId.toString(),
+                    PUSH_CHECK_IN_DATE_KEY to checkInDate.toString(),
+                ),
+            ),
+        )
+    }
+
+    private fun activeCoachOf(clientUserId: UUID): CoachEntity? {
+        val link = coachClientRepository
+            .findByUserId(clientUserId)
+            .firstOrNull { it.status == CoachClientStatus.ACTIVE }
+            ?: return null
+        return coachRepository.findByIdOrNull(link.coachId)
     }
 
     @Transactional

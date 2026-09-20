@@ -1,11 +1,13 @@
 package app.trainer.backend.notification
 
+import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
 import app.trainer.backend.config.Page
 import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.config.pageSizeOf
+import app.trainer.backend.push.NotificationAudience
 import app.trainer.backend.push.NotificationReason
 import app.trainer.backend.push.PushTexts
 import com.fasterxml.jackson.core.type.TypeReference
@@ -14,8 +16,10 @@ import java.time.Clock
 import java.time.Instant
 import java.util.Locale
 import java.util.UUID
+import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 
 private const val NOTIFICATIONS_PER_PAGE = 30
 
@@ -26,6 +30,7 @@ private val DATA_TYPE = object : TypeReference<Map<String, String>>() {}
 class NotificationService(
     private val notificationRepository: NotificationRepository,
     private val settingRepository: NotificationSettingRepository,
+    private val coachRepository: CoachRepository,
     private val pushTexts: PushTexts,
     private val objectMapper: ObjectMapper,
     private val clock: Clock,
@@ -61,10 +66,24 @@ class NotificationService(
     @Transactional(readOnly = true)
     fun settings(userId: UUID): List<NotificationSettingResponse> {
         val chosen = settingRepository.findByUserId(userId).associateBy { it.reason }
-        return NotificationReason.entries.map { reason ->
-            NotificationSettingResponse(reason = reason, pushEnabled = chosen[reason]?.pushEnabled ?: true)
+        return reasonsOf(audienceOf(userId)).map { reason ->
+            NotificationSettingResponse(
+                reason = reason,
+                pushEnabled = if (reason.canTurnOff) chosen[reason]?.pushEnabled ?: true else true,
+                canTurnOff = reason.canTurnOff,
+            )
         }
     }
+
+    private fun audienceOf(userId: UUID): NotificationAudience =
+        if (coachRepository.findByUserId(userId) == null) {
+            NotificationAudience.CLIENT
+        } else {
+            NotificationAudience.COACH
+        }
+
+    private fun reasonsOf(audience: NotificationAudience): List<NotificationReason> =
+        NotificationReason.entries.filter { it.audience == audience }
 
     @Transactional
     fun updateSetting(
@@ -72,6 +91,12 @@ class NotificationService(
         reason: NotificationReason,
         pushEnabled: Boolean,
     ): List<NotificationSettingResponse> {
+        if (reason.audience != audienceOf(userId)) {
+            throw ResponseStatusException(HttpStatus.FORBIDDEN, "Этот повод не для вашей роли")
+        }
+        if (!reason.canTurnOff && !pushEnabled) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Этот повод выключить нельзя")
+        }
         val known = settingRepository.findByUserIdAndReason(userId = userId, reason = reason)
         if (known == null) {
             settingRepository.save(

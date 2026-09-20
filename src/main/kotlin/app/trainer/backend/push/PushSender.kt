@@ -7,7 +7,18 @@ enum class PushChannel(val androidChannelId: String) {
     SCHEDULE("schedule"),
 }
 
-enum class NotificationReason { COACH_REPLIES, SESSION_REMINDERS, SCHEDULE_CHANGES, NEW_PROGRAMS }
+enum class NotificationAudience { CLIENT, COACH }
+
+enum class NotificationReason(val audience: NotificationAudience, val canTurnOff: Boolean = true) {
+    COACH_REPLIES(NotificationAudience.CLIENT),
+    SESSION_REMINDERS(NotificationAudience.CLIENT),
+    SCHEDULE_CHANGES(NotificationAudience.CLIENT),
+    NEW_PROGRAMS(NotificationAudience.CLIENT),
+    CHANGE_REQUESTS(NotificationAudience.COACH, canTurnOff = false),
+    NEW_CHECK_INS(NotificationAudience.COACH),
+    NEW_CLIENTS(NotificationAudience.COACH),
+    SLOT_BOOKINGS(NotificationAudience.COACH),
+}
 
 enum class PushText(
     val titleKey: String,
@@ -43,7 +54,7 @@ enum class PushText(
         "push.schedule.client-cancelled.title",
         "push.schedule.client-cancelled.body",
         keptInHistory = true,
-        reason = NotificationReason.SCHEDULE_CHANGES,
+        reason = NotificationReason.CHANGE_REQUESTS,
     ),
     SESSION_SOON(
         "push.reminder.session.title",
@@ -79,13 +90,37 @@ enum class PushText(
         "push.schedule.reschedule-requested.title",
         "push.schedule.reschedule-requested.body",
         keptInHistory = true,
-        reason = NotificationReason.SCHEDULE_CHANGES,
+        reason = NotificationReason.CHANGE_REQUESTS,
     ),
     CANCEL_REQUESTED(
         "push.schedule.cancel-requested.title",
         "push.schedule.cancel-requested.body",
         keptInHistory = true,
-        reason = NotificationReason.SCHEDULE_CHANGES,
+        reason = NotificationReason.CHANGE_REQUESTS,
+    ),
+    NEW_CHECK_IN(
+        "push.coach.check-in.title",
+        "push.coach.check-in.body",
+        keptInHistory = true,
+        reason = NotificationReason.NEW_CHECK_INS,
+    ),
+    NEW_FORM_CHECK(
+        "push.coach.form-check.title",
+        "push.coach.form-check.body",
+        keptInHistory = true,
+        reason = NotificationReason.NEW_CHECK_INS,
+    ),
+    NEW_CLIENT(
+        "push.coach.new-client.title",
+        "push.coach.new-client.body",
+        keptInHistory = true,
+        reason = NotificationReason.NEW_CLIENTS,
+    ),
+    SLOT_BOOKED(
+        "push.coach.slot-booked.title",
+        "push.coach.slot-booked.body",
+        keptInHistory = true,
+        reason = NotificationReason.SLOT_BOOKINGS,
     ),
     RESCHEDULE_APPROVED(
         "push.schedule.reschedule-approved.title",
