@@ -8,7 +8,9 @@ import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.media.MediaFileService
+import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
@@ -21,7 +23,11 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
@@ -40,6 +46,12 @@ private const val REMINDER_HOUR = 10
 private const val PAGE_SIZE = 2
 private const val PAGE_SIZE_WITH_PROBE = PAGE_SIZE + 1
 private const val AWAITING_BEYOND_A_PAGE = 25L
+
+@Suppress("UNCHECKED_CAST")
+private fun <T> anyNonNull(): T = ArgumentMatchers.any<T>() ?: (null as T)
+
+@Suppress("UNCHECKED_CAST")
+private fun <T> capturedBy(captor: ArgumentCaptor<*>): T = captor.capture() as T
 
 class CheckInReviewTest {
 
@@ -60,6 +72,31 @@ class CheckInReviewTest {
         pushSender = pushSender,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
+
+    @Test
+    fun `a check-in sent for the first time reaches the coach`() {
+        givenClientOf(coach())
+        `when`(checkInRepository.findByClientUserIdAndCheckInDate(CLIENT_USER_ID, CHECK_IN_DATE)).thenReturn(null)
+        `when`(checkInRepository.save(anyNonNull<CheckInEntity>())).thenAnswer { it.arguments.first() }
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+
+        service.save(clientUserId = CLIENT_USER_ID, checkInDate = CHECK_IN_DATE, request = emptyCheckIn())
+
+        verify(pushSender).send(anyNonNull(), capturedBy(message))
+        assertEquals(PushText.NEW_CHECK_IN, message.value.text)
+        assertEquals(listOf("Анна", "01.03"), message.value.args)
+    }
+
+    @Test
+    fun `saving the same check-in again says nothing to the coach`() {
+        givenClientOf(coach())
+        `when`(checkInRepository.findByClientUserIdAndCheckInDate(CLIENT_USER_ID, CHECK_IN_DATE))
+            .thenReturn(checkIn())
+
+        service.save(clientUserId = CLIENT_USER_ID, checkInDate = CHECK_IN_DATE, request = emptyCheckIn())
+
+        verify(pushSender, never()).send(anyNonNull(), anyNonNull())
+    }
 
     @Test
     fun `check-ins waiting for an answer come back with the client name`() {
@@ -195,6 +232,34 @@ class CheckInReviewTest {
             )
         )
     }
+
+    private fun givenClientOf(coach: CoachEntity) {
+        `when`(coachClientRepository.findByUserId(CLIENT_USER_ID)).thenReturn(
+            listOf(
+                CoachClientEntity(
+                    id = UUID.randomUUID(),
+                    coachId = coach.id,
+                    userId = CLIENT_USER_ID,
+                    status = CoachClientStatus.ACTIVE,
+                    createdAt = NOW,
+                )
+            )
+        )
+        `when`(coachRepository.findById(coach.id)).thenReturn(Optional.of(coach))
+        `when`(userRepository.findById(CLIENT_USER_ID)).thenReturn(Optional.of(client()))
+    }
+
+    private fun emptyCheckIn(): SaveCheckInRequest = SaveCheckInRequest(
+        weightGrams = null,
+        waistMillimeters = null,
+        chestMillimeters = null,
+        hipsMillimeters = null,
+        wellbeing = null,
+        sleepQuality = null,
+        adherence = null,
+        notes = null,
+        photoIds = emptyList(),
+    )
 
     private fun coach(): CoachEntity = CoachEntity(
         id = COACH_ID,

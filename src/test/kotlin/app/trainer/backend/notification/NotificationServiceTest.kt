@@ -1,5 +1,7 @@
 package app.trainer.backend.notification
 
+import app.trainer.backend.coach.CoachEntity
+import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.push.DEFAULT_PUSH_LOCALE
 import app.trainer.backend.push.NotificationReason
@@ -11,16 +13,23 @@ import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.context.support.ResourceBundleMessageSource
+import org.springframework.http.HttpStatus
+import org.springframework.web.server.ResponseStatusException
 
 private val ANNA: UUID = UUID.fromString("94000000-0000-0000-0000-000000000001")
+private val IGOR: UUID = UUID.fromString("94000000-0000-0000-0000-000000000002")
+private const val CANCELLATION_WINDOW_HOURS = 12
+private const val REMINDER_HOUR = 10
 private val NOW: Instant = Instant.parse("2026-09-19T09:00:00Z")
 private val EARLIER: Instant = Instant.parse("2026-09-18T09:00:00Z")
 private const val PAGE_OF_ONE = 1
@@ -32,6 +41,7 @@ class NotificationServiceTest {
 
     private val notificationRepository = mock(NotificationRepository::class.java)
     private val settingRepository = mock(NotificationSettingRepository::class.java)
+    private val coachRepository = mock(CoachRepository::class.java)
 
     private val service = NotificationService(
         notificationRepository = notificationRepository,
@@ -43,6 +53,7 @@ class NotificationServiceTest {
                 setFallbackToSystemLocale(false)
             }
         ),
+        coachRepository = coachRepository,
         objectMapper = ObjectMapper(),
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
@@ -107,11 +118,62 @@ class NotificationServiceTest {
     }
 
     @Test
+    fun `a coach is offered the reasons of a coach`() {
+        `when`(coachRepository.findByUserId(IGOR)).thenReturn(coach())
+
+        val settings = service.settings(IGOR)
+
+        assertEquals(
+            listOf(
+                NotificationReason.CHANGE_REQUESTS,
+                NotificationReason.NEW_CHECK_INS,
+                NotificationReason.NEW_CLIENTS,
+                NotificationReason.SLOT_BOOKINGS,
+            ),
+            settings.map { it.reason },
+        )
+        assertEquals(false, settings.first().canTurnOff, "просьбы выключить нельзя")
+    }
+
+    @Test
+    fun `requests about the schedule cannot be turned off`() {
+        `when`(coachRepository.findByUserId(IGOR)).thenReturn(coach())
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.updateSetting(userId = IGOR, reason = NotificationReason.CHANGE_REQUESTS, pushEnabled = false)
+        }
+
+        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+        verify(settingRepository, never()).save(anyNonNull<NotificationSettingEntity>())
+    }
+
+    @Test
+    fun `a client has no say about the reasons of a coach`() {
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.updateSetting(userId = ANNA, reason = NotificationReason.NEW_CHECK_INS, pushEnabled = false)
+        }
+
+        assertEquals(HttpStatus.FORBIDDEN, failure.statusCode)
+    }
+
+    @Test
     fun `read all marks everything unread as read now`() {
         service.readAll(ANNA)
 
         verify(notificationRepository).markAllRead(ANNA, NOW)
     }
+
+    private fun coach(): CoachEntity = CoachEntity(
+        id = UUID.randomUUID(),
+        userId = IGOR,
+        zoneId = "Europe/Moscow",
+        cancellationWindowHours = CANCELLATION_WINDOW_HOURS,
+        reminderHour = REMINDER_HOUR,
+        sessionRemindersEnabled = true,
+        diaryRemindersEnabled = true,
+        checkInRemindersEnabled = true,
+        createdAt = NOW,
+    )
 
     private fun notification(kind: PushText, createdAt: Instant, readAt: Instant?) = NotificationEntity(
         id = UUID.randomUUID(),
