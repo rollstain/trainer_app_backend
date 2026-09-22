@@ -1,5 +1,6 @@
 package app.trainer.backend.chat
 
+import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
@@ -39,6 +40,7 @@ class DialogsPageTest {
     private val messageRepository = mock(MessageRepository::class.java)
     private val dialogReadRepository = mock(DialogReadRepository::class.java)
     private val coachRepository = mock(CoachRepository::class.java)
+    private val coachClientRepository = mock(CoachClientRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
     private val mediaFileService = mock(MediaFileService::class.java)
     private val eventPublisher = mock(ApplicationEventPublisher::class.java)
@@ -48,6 +50,7 @@ class DialogsPageTest {
         messageRepository = messageRepository,
         dialogReadRepository = dialogReadRepository,
         coachRepository = coachRepository,
+        coachClientRepository = coachClientRepository,
         userRepository = userRepository,
         mediaFileService = mediaFileService,
         eventPublisher = eventPublisher,

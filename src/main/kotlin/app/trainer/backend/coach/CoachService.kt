@@ -8,15 +8,24 @@ import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.config.pageSizeOf
+import app.trainer.backend.program.ProgramService
+import app.trainer.backend.push.PushChannel
+import app.trainer.backend.push.PushMessage
+import app.trainer.backend.push.PushSender
+import app.trainer.backend.push.PushText
 import app.trainer.backend.schedule.ScheduleService
 import app.trainer.backend.user.UserRepository
+import java.time.Clock
 import java.time.DayOfWeek
+import java.time.Instant
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+
+private const val PUSH_CLIENT_USER_ID_KEY = "clientUserId"
 
 @Service
 class CoachService(
@@ -26,6 +35,9 @@ class CoachService(
     private val clientNoteRepository: ClientNoteRepository,
     private val workingHourRepository: CoachWorkingHourRepository,
     private val scheduleService: ScheduleService,
+    private val programService: ProgramService,
+    private val pushSender: PushSender,
+    private val clock: Clock,
 ) {
 
     @Transactional(readOnly = true)
@@ -152,8 +164,60 @@ class CoachService(
         if (link == null || link.status != CoachClientStatus.ACTIVE) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Подопечный не найден")
         }
+        endLink(link = link, endedBy = LinkEndedBy.COACH)
+    }
+
+    @Transactional
+    fun leaveCoach(userId: UUID, coachId: UUID) {
+        val link = coachClientRepository.findByCoachIdAndUserId(coachId = coachId, userId = userId)
+        if (link == null || link.status != CoachClientStatus.ACTIVE) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Этот тренер вас не ведёт")
+        }
+        endLink(link = link, endedBy = LinkEndedBy.CLIENT)
+        tellCoachAboutLeaving(coachId = coachId, clientUserId = userId)
+    }
+
+    @Transactional(readOnly = true)
+    fun pastClients(coachUserId: UUID): List<CoachClientResponse> {
+        val coach = requireCoach(coachUserId)
+        val links = coachClientRepository
+            .findByCoachIdAndStatus(coachId = coach.id, status = CoachClientStatus.ARCHIVED)
+            .sortedByDescending { it.endedAt ?: it.createdAt }
+        val usersById = userRepository.findAllById(links.map { it.userId }).associateBy { it.id }
+        return links.mapNotNull { link ->
+            val user = usersById[link.userId] ?: return@mapNotNull null
+            CoachClientResponse(
+                userId = user.id,
+                displayName = user.displayName,
+                status = link.status,
+                hasMedicalNotes = false,
+                linkedAt = link.createdAt,
+                endedAt = link.endedAt,
+                endedBy = link.endedBy,
+            )
+        }
+    }
+
+    private fun endLink(link: CoachClientEntity, endedBy: LinkEndedBy) {
         link.status = CoachClientStatus.ARCHIVED
-        scheduleService.releaseBookingsOf(coachId = coach.id, clientUserId = clientUserId)
+        link.endedAt = Instant.now(clock)
+        link.endedBy = endedBy
+        programService.endAssignmentQuietly(link.userId)
+        scheduleService.releaseBookingsOf(coachId = link.coachId, clientUserId = link.userId)
+    }
+
+    private fun tellCoachAboutLeaving(coachId: UUID, clientUserId: UUID) {
+        val coach = coachRepository.findByIdOrNull(coachId) ?: return
+        val clientName = userRepository.findByIdOrNull(clientUserId)?.displayName ?: return
+        pushSender.send(
+            userIds = listOf(coach.userId),
+            message = PushMessage(
+                channel = PushChannel.CHAT,
+                text = PushText.CLIENT_UNLINKED,
+                args = listOf(clientName),
+                data = mapOf(PUSH_CLIENT_USER_ID_KEY to clientUserId.toString()),
+            ),
+        )
     }
 
     private fun requireCoach(coachUserId: UUID): CoachEntity = coachRepository.findByUserId(coachUserId)

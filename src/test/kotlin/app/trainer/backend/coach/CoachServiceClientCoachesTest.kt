@@ -1,10 +1,14 @@
 package app.trainer.backend.coach
 
 import app.trainer.backend.clientnotes.ClientNoteRepository
+import app.trainer.backend.program.ProgramService
+import app.trainer.backend.push.PushSender
 import app.trainer.backend.schedule.ScheduleService
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
+import java.time.Clock
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.Optional
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -21,6 +25,8 @@ private val LINKED_AT: Instant = Instant.parse("2026-09-01T09:30:00Z")
 private const val CANCELLATION_WINDOW_HOURS = 12
 private const val REMINDER_HOUR = 10
 
+private val TEST_NOW: Instant = Instant.parse("2026-09-23T09:00:00Z")
+
 class CoachServiceClientCoachesTest {
 
     private val coachRepository = mock(CoachRepository::class.java)
@@ -29,6 +35,8 @@ class CoachServiceClientCoachesTest {
     private val clientNoteRepository = mock(ClientNoteRepository::class.java)
     private val workingHourRepository = mock(CoachWorkingHourRepository::class.java)
     private val scheduleService = mock(ScheduleService::class.java)
+    private val programService = mock(ProgramService::class.java)
+    private val pushSender = mock(PushSender::class.java)
 
     private val service = CoachService(
         coachRepository = coachRepository,
@@ -37,6 +45,9 @@ class CoachServiceClientCoachesTest {
         clientNoteRepository = clientNoteRepository,
         workingHourRepository = workingHourRepository,
         scheduleService = scheduleService,
+        programService = programService,
+        pushSender = pushSender,
+        clock = Clock.fixed(TEST_NOW, ZoneOffset.UTC),
     )
 
     @Test

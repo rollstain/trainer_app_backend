@@ -18,6 +18,8 @@ data class CoachClientResponse(
     val status: CoachClientStatus,
     val hasMedicalNotes: Boolean,
     val linkedAt: Instant,
+    val endedAt: Instant? = null,
+    val endedBy: LinkEndedBy? = null,
 )
 
 data class CoachSummaryResponse(
