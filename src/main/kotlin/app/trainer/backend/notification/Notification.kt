@@ -86,6 +86,8 @@ interface NotificationRepository : JpaRepository<NotificationEntity, UUID> {
 
     fun countByUserIdAndReadAtIsNull(userId: UUID): Long
 
+    fun countByUserIdAndKindAndCreatedAtAfter(userId: UUID, kind: PushText, createdAt: Instant): Long
+
     @Modifying
     @Query("update NotificationEntity n set n.readAt = :readAt where n.userId = :userId and n.readAt is null")
     fun markAllRead(@Param("userId") userId: UUID, @Param("readAt") readAt: Instant): Int

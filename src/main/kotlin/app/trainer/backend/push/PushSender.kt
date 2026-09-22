@@ -9,13 +9,19 @@ enum class PushChannel(val androidChannelId: String) {
 
 enum class NotificationAudience { CLIENT, COACH }
 
-enum class NotificationReason(val audience: NotificationAudience, val canTurnOff: Boolean = true) {
+enum class NotificationDelivery { IMMEDIATE, DAILY_DIGEST }
+
+enum class NotificationReason(
+    val audience: NotificationAudience,
+    val canTurnOff: Boolean = true,
+    val delivery: NotificationDelivery = NotificationDelivery.IMMEDIATE,
+) {
     COACH_REPLIES(NotificationAudience.CLIENT),
     SESSION_REMINDERS(NotificationAudience.CLIENT),
     SCHEDULE_CHANGES(NotificationAudience.CLIENT),
     NEW_PROGRAMS(NotificationAudience.CLIENT),
     CHANGE_REQUESTS(NotificationAudience.COACH, canTurnOff = false),
-    NEW_CHECK_INS(NotificationAudience.COACH),
+    NEW_CHECK_INS(NotificationAudience.COACH, delivery = NotificationDelivery.DAILY_DIGEST),
     NEW_CLIENTS(NotificationAudience.COACH),
     SLOT_BOOKINGS(NotificationAudience.COACH),
 }
@@ -122,6 +128,18 @@ enum class PushText(
         keptInHistory = true,
         reason = NotificationReason.SLOT_BOOKINGS,
     ),
+    CHECK_INS_WAITING(
+        "push.coach.check-ins-waiting.title",
+        "push.coach.check-ins-waiting.body",
+        keptInHistory = false,
+        reason = NotificationReason.NEW_CHECK_INS,
+    ),
+    FORM_CHECKS_WAITING(
+        "push.coach.form-checks-waiting.title",
+        "push.coach.form-checks-waiting.body",
+        keptInHistory = false,
+        reason = NotificationReason.NEW_CHECK_INS,
+    ),
     RESCHEDULE_APPROVED(
         "push.schedule.reschedule-approved.title",
         "push.schedule.reschedule-approved.body",
@@ -170,6 +188,10 @@ enum class PushText(
         keptInHistory = true,
         reason = NotificationReason.NEW_PROGRAMS,
     ),
+    ;
+
+    val collapsesIntoDigest: Boolean
+        get() = keptInHistory && reason?.delivery == NotificationDelivery.DAILY_DIGEST
 }
 
 data class PushMessage(

@@ -1,5 +1,6 @@
 package app.trainer.backend.notification
 
+import app.trainer.backend.push.NotificationDelivery
 import app.trainer.backend.push.NotificationReason
 import app.trainer.backend.push.PushText
 import java.time.Instant
@@ -23,6 +24,7 @@ data class NotificationSettingResponse(
     val reason: NotificationReason,
     val pushEnabled: Boolean,
     val canTurnOff: Boolean,
+    val delivery: NotificationDelivery,
 )
 
 data class UpdateNotificationSettingRequest(
