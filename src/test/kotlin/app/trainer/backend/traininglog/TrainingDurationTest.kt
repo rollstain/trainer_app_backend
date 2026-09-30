@@ -48,6 +48,8 @@ class TrainingDurationTest {
 
         assertEquals(STARTED, entry.startedAt)
         assertEquals(FINISHED, entry.finishedAt)
+        assertEquals(STARTED, saved.startedAt)
+        assertEquals(FINISHED, saved.finishedAt)
         assertEquals(FORTY_EIGHT_MINUTES_IN_SECONDS, saved.durationSeconds)
     }
 
