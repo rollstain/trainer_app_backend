@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
 
 private const val PUSH_CLIENT_USER_ID_KEY = "clientUserId"
+private const val PUSH_COACH_ID_KEY = "coachId"
 
 @Service
 class CoachService(
@@ -171,6 +172,7 @@ class CoachService(
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Подопечный не найден")
         }
         endLink(link = link, endedBy = LinkEndedBy.COACH)
+        tellClientAboutEnding(coach = coach, clientUserId = clientUserId)
     }
 
     @Transactional
@@ -223,6 +225,19 @@ class CoachService(
                 text = PushText.CLIENT_UNLINKED,
                 args = listOf(clientName),
                 data = mapOf(PUSH_CLIENT_USER_ID_KEY to clientUserId.toString()),
+            ),
+        )
+    }
+
+    private fun tellClientAboutEnding(coach: CoachEntity, clientUserId: UUID) {
+        val coachName = userRepository.findByIdOrNull(coach.userId)?.displayName ?: return
+        pushSender.send(
+            userIds = listOf(clientUserId),
+            message = PushMessage(
+                channel = PushChannel.SCHEDULE,
+                text = PushText.COACH_UNLINKED,
+                args = listOf(coachName),
+                data = mapOf(PUSH_COACH_ID_KEY to coach.id.toString()),
             ),
         )
     }

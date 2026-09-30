@@ -79,6 +79,23 @@ class CoachServiceArchiveTest {
     }
 
     @Test
+    fun `a client taken off the books hears it from the coach by name`() {
+        givenCoach()
+        `when`(coachClientRepository.findByCoachIdAndUserId(COACH_ID, CLIENT_USER_ID))
+            .thenReturn(link(status = CoachClientStatus.ACTIVE))
+        `when`(userRepository.findById(COACH_USER_ID)).thenReturn(Optional.of(coachUser()))
+        val recipients = ArgumentCaptor.forClass(List::class.java)
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+
+        service.archiveClient(coachUserId = COACH_USER_ID, clientUserId = CLIENT_USER_ID)
+
+        verify(pushSender).send(capturedBy(recipients), capturedBy(message))
+        assertEquals(listOf(CLIENT_USER_ID), recipients.value)
+        assertEquals(PushText.COACH_UNLINKED, message.value.text)
+        assertEquals(listOf("Максим"), message.value.args)
+    }
+
+    @Test
     fun `a client who leaves ends the link themselves and the coach hears about it`() {
         val link = link(status = CoachClientStatus.ACTIVE)
         `when`(coachClientRepository.findByCoachIdAndUserId(COACH_ID, CLIENT_USER_ID)).thenReturn(link)
@@ -163,6 +180,16 @@ class CoachServiceArchiveTest {
 
         assertEquals(HttpStatus.FORBIDDEN, failure.statusCode)
     }
+
+    private fun coachUser(): UserEntity = UserEntity(
+        id = COACH_USER_ID,
+        displayName = "Максим",
+        phone = null,
+        email = null,
+        login = null,
+        isOwner = false,
+        createdAt = CREATED_AT,
+    )
 
     private fun client(): UserEntity = UserEntity(
         id = CLIENT_USER_ID,

@@ -34,6 +34,8 @@ interface DialogListRow {
     fun getMessageBody(): String?
 
     fun getMessageCreatedAt(): Instant?
+
+    fun getReadOnly(): Boolean
 }
 
 interface DialogRepository : JpaRepository<DialogEntity, UUID> {
@@ -61,7 +63,13 @@ interface DialogRepository : JpaRepository<DialogEntity, UUID> {
                    ) as unreadCount,
                    coalesce(last_message.created_at, timestamp 'epoch') as sortKey,
                    last_message.body as messageBody,
-                   last_message.created_at as messageCreatedAt
+                   last_message.created_at as messageCreatedAt,
+                   not exists (
+                     select 1 from coach_clients link
+                     where link.coach_id = d.coach_id
+                       and link.user_id = d.client_user_id
+                       and link.status = 'ACTIVE'
+                   ) as readOnly
             from dialogs d
             join coaches c on c.id = d.coach_id
             join users peer

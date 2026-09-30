@@ -86,6 +86,8 @@ data class TrainingLogEntryResponse(
     val notes: String?,
     val sets: List<TrainingSetResponse>,
     val totalVolumeGrams: Long,
+    val startedAt: Instant?,
+    val finishedAt: Instant?,
     val durationSeconds: Long?,
 )
 

@@ -103,10 +103,30 @@ class DialogsPageTest {
         assertEquals(UNREAD_COUNT, page.items.single().unreadCount)
     }
 
-    private fun row(dialogId: UUID, sortKey: Instant, hasMessage: Boolean = true): DialogListRow = Row(
+    @Test
+    fun `a dialog whose link has ended is read-only, a live one is not`() {
+        `when`(dialogRepository.findPage(VIEWER_USER_ID, null, null, PAGE_SIZE_WITH_PROBE)).thenReturn(
+            listOf(
+                row(dialogId = FIRST_DIALOG_ID, sortKey = NOW),
+                row(dialogId = SECOND_DIALOG_ID, sortKey = EARLIER, readOnly = true),
+            )
+        )
+
+        val page = service.dialogsOf(userId = VIEWER_USER_ID, limit = PAGE_SIZE, after = null)
+
+        assertEquals(listOf(false, true), page.items.map { it.isReadOnly })
+    }
+
+    private fun row(
+        dialogId: UUID,
+        sortKey: Instant,
+        hasMessage: Boolean = true,
+        readOnly: Boolean = false,
+    ): DialogListRow = Row(
         dialogId = dialogId,
         sortKey = sortKey,
         messageCreatedAt = sortKey.takeIf { hasMessage },
+        readOnly = readOnly,
     )
 }
 
@@ -114,6 +134,7 @@ private class Row(
     private val dialogId: UUID,
     private val sortKey: Instant,
     private val messageCreatedAt: Instant?,
+    private val readOnly: Boolean,
 ) : DialogListRow {
 
     override fun getDialogId(): UUID = dialogId
@@ -139,4 +160,6 @@ private class Row(
     override fun getMessageBody(): String? = LAST_MESSAGE_BODY.takeIf { messageCreatedAt != null }
 
     override fun getMessageCreatedAt(): Instant? = messageCreatedAt
+
+    override fun getReadOnly(): Boolean = readOnly
 }
