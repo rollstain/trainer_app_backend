@@ -197,6 +197,7 @@ class ChatService(
         unreadCount = row.getUnreadCount(),
         lastMessagePreview = row.getMessageBody(),
         lastMessageAt = row.getMessageCreatedAt(),
+        isReadOnly = row.getReadOnly(),
     )
 
     @Transactional

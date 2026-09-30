@@ -128,6 +128,12 @@ enum class PushText(
         keptInHistory = true,
         reason = NotificationReason.NEW_CLIENTS,
     ),
+    COACH_UNLINKED(
+        "push.client.coach-unlinked.title",
+        "push.client.coach-unlinked.body",
+        keptInHistory = true,
+        reason = NotificationReason.SCHEDULE_CHANGES,
+    ),
     SLOT_BOOKED(
         "push.coach.slot-booked.title",
         "push.coach.slot-booked.body",
