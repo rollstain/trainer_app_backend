@@ -247,6 +247,8 @@ class TrainingLogService(
         entry.slotId = request.slotId
         entry.notes = request.notes?.trim()?.ifEmpty { null }
         entry.updatedAt = now
+        request.startedAt?.let { entry.startedAt = it }
+        request.finishedAt?.let { entry.finishedAt = it }
 
         setRepository.deleteByEntryId(entry.id)
         val saved = request.sets.mapIndexed { index, set ->
@@ -325,30 +327,13 @@ class TrainingLogService(
         entriesWithSets: List<Pair<TrainingLogEntryEntity, List<TrainingLogSetEntity>>>,
     ): Set<UUID> {
         val earliestDate = entriesWithSets.minOfOrNull { (entry, _) -> entry.entryDate } ?: return emptySet()
-        val bestVolumeByExercise = setRepository
+        val bestVolumeBefore = setRepository
             .bestVolumePerExerciseBefore(clientUserId = clientUserId, beforeDate = earliestDate)
             .associate { it.getExerciseId() to it.getBestVolume() }
-            .toMutableMap()
-
-        val records = mutableSetOf<UUID>()
-        entriesWithSets.forEach { (_, sets) ->
-            sets.sortedBy { it.position }.forEach { set ->
-                val volume = volumeOf(set) ?: return@forEach
-                val best = bestVolumeByExercise[set.exerciseId] ?: 0
-                if (volume > best) {
-                    records.add(set.id)
-                    bestVolumeByExercise[set.exerciseId] = volume
-                }
-            }
-        }
-        return records
-    }
-
-    private fun volumeOf(set: TrainingLogSetEntity): Long? {
-        val repetitions = set.repetitions ?: return null
-        val weightGrams = set.weightGrams ?: return null
-        val volume = repetitions.toLong() * weightGrams
-        return if (volume == 0L) null else volume
+        return recordSetIdsOf(
+            bestVolumeBefore = bestVolumeBefore,
+            setsInDateOrder = entriesWithSets.map { (_, sets) -> sets },
+        )
     }
 
     private fun ownerNameOf(exercise: ExerciseEntity): String? = when (exercise.ownerKind) {
@@ -452,6 +437,7 @@ class TrainingLogService(
             notes = entry.notes,
             sets = setResponses,
             totalVolumeGrams = totalVolumeOf(setResponses),
+            durationSeconds = durationSecondsOf(startedAt = entry.startedAt, finishedAt = entry.finishedAt),
         )
     }
 

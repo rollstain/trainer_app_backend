@@ -92,5 +92,7 @@ interface ProgramAssignmentRepository : JpaRepository<ProgramAssignmentEntity, U
 
     fun findByClientUserIdAndEndedAtIsNull(clientUserId: UUID): ProgramAssignmentEntity?
 
+    fun findByClientUserIdInAndEndedAtIsNull(clientUserIds: Collection<UUID>): List<ProgramAssignmentEntity>
+
     fun findByProgramIdAndEndedAtIsNull(programId: UUID): List<ProgramAssignmentEntity>
 }

@@ -58,6 +58,8 @@ data class SaveTrainingLogRequest(
     val slotId: UUID?,
     @field:Size(max = NOTES_MAX_LENGTH)
     val notes: String?,
+    val startedAt: Instant?,
+    val finishedAt: Instant?,
     @field:Valid
     @field:Size(max = SETS_MAX_COUNT)
     val sets: List<TrainingSetRequest>,
@@ -84,6 +86,29 @@ data class TrainingLogEntryResponse(
     val notes: String?,
     val sets: List<TrainingSetResponse>,
     val totalVolumeGrams: Long,
+    val durationSeconds: Long?,
+)
+
+data class TrainingFeedRecordResponse(
+    val exerciseName: String,
+    val weightGrams: Int?,
+    val repetitions: Int?,
+    val durationSeconds: Int?,
+    val distanceMeters: Int?,
+)
+
+data class TrainingFeedItemResponse(
+    val entryId: UUID,
+    val clientUserId: UUID,
+    val clientDisplayName: String,
+    val entryDate: LocalDate,
+    val updatedAt: Instant,
+    val exercisesCount: Int,
+    val setsCount: Int,
+    val totalVolumeGrams: Long,
+    val durationSeconds: Long?,
+    val personalRecords: List<TrainingFeedRecordResponse>,
+    val isSeen: Boolean,
 )
 
 data class DiaryDayResponse(

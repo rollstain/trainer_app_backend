@@ -8,6 +8,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 @Entity
 @Table(name = "habits")
@@ -51,6 +53,9 @@ class HabitMarkEntity(
 interface HabitRepository : JpaRepository<HabitEntity, UUID> {
 
     fun findByClientUserIdAndArchivedAtIsNullOrderByCreatedAtAsc(clientUserId: UUID): List<HabitEntity>
+
+    @Query("select distinct h.title from HabitEntity h where h.coachId = :coachId order by h.title")
+    fun titlesOfCoach(@Param("coachId") coachId: UUID): List<String>
 }
 
 interface HabitMarkRepository : JpaRepository<HabitMarkEntity, UUID> {

@@ -2,6 +2,7 @@ package app.trainer.backend.coach
 
 import app.trainer.backend.clientnotes.ClientNoteRepository
 import app.trainer.backend.config.decodeCursor
+import app.trainer.backend.program.ClientProgramSummaryResponse
 import app.trainer.backend.program.ProgramService
 import app.trainer.backend.push.PushSender
 import app.trainer.backend.schedule.ScheduleService
@@ -9,6 +10,7 @@ import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -27,6 +29,8 @@ private val NOW: Instant = Instant.parse("2026-03-02T09:00:00Z")
 private const val WINDOW_HOURS = 12
 private const val MORNING_HOUR = 10
 private const val PAGE_SIZE = 2
+private const val PROGRAM_WEEKS = 12
+private const val CURRENT_WEEK = 3
 
 @Suppress("UNCHECKED_CAST")
 private fun <T> anyNonNull(): T = ArgumentMatchers.any<T>() ?: (null as T)
@@ -135,6 +139,34 @@ class CoachClientsPageTest {
         assertNull(page.nextCursor, "выборка по id не листается")
         verify(coachClientRepository, never())
             .findActivePage(anyNonNull(), anyNonNull(), anyNonNull(), anyNonNull(), ArgumentMatchers.anyInt())
+    }
+
+    @Test
+    fun `each client in the list carries the program they are on`() {
+        givenCoach()
+        val anna = client("Анна")
+        val boris = client("Борис")
+        givenRoster(ordered = listOf(anna, boris))
+        val strength = ClientProgramSummaryResponse(
+            programId = UUID.fromString("50000000-0000-0000-0000-000000000099"),
+            programTitle = "Сила и форма",
+            weeksCount = PROGRAM_WEEKS,
+            currentWeekNumber = CURRENT_WEEK,
+        )
+        `when`(programService.programSummariesOf(anyNonNull(), anyNonNull()))
+            .thenReturn(mapOf(anna.userId to strength))
+
+        val page = service.clientsOfCoach(
+            coachUserId = PAGE_COACH_USER_ID,
+            limit = null,
+            after = null,
+            userIds = null,
+            query = null,
+        )
+
+        assertEquals(strength, page.items.first { it.displayName == "Анна" }.program)
+        assertNull(page.items.first { it.displayName == "Борис" }.program, "без программы — пусто, а не выдумка")
+        verify(programService).programSummariesOf(listOf(anna.userId, boris.userId), ZoneId.of("Europe/Moscow"))
     }
 
     private fun givenCoach() {

@@ -18,6 +18,7 @@ import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.DayOfWeek
 import java.time.Instant
+import java.time.ZoneId
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -77,6 +78,10 @@ class CoachService(
             .findClientUserIdsWithKind(coachId = coach.id, kind = ClientNoteKind.MEDICAL)
             .toSet()
         val usersById = userRepository.findAllById(links.map { it.userId }).associateBy { it.id }
+        val programs = programService.programSummariesOf(
+            clientUserIds = links.map { it.userId },
+            coachZone = ZoneId.of(coach.zoneId),
+        )
         val items = links.mapNotNull { link ->
             val user = usersById[link.userId] ?: return@mapNotNull null
             CoachClientResponse(
@@ -85,6 +90,7 @@ class CoachService(
                 status = link.status,
                 hasMedicalNotes = user.id in withMedicalNotes,
                 linkedAt = link.createdAt,
+                program = programs[user.id],
             )
         }
         val lastLink = links.lastOrNull()?.takeIf { hasMore }
@@ -194,6 +200,7 @@ class CoachService(
                 linkedAt = link.createdAt,
                 endedAt = link.endedAt,
                 endedBy = link.endedBy,
+                program = null,
             )
         }
     }

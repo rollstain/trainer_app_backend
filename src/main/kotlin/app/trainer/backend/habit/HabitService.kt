@@ -39,6 +39,10 @@ class HabitService(
         return habitsOf(clientUserId = clientUserId, from = from, to = to)
     }
 
+    @Transactional(readOnly = true)
+    fun titlesOfCoach(coachUserId: UUID): List<String> =
+        habitRepository.titlesOfCoach(requireCoach(coachUserId).id)
+
     @Transactional
     fun createForClient(
         coachUserId: UUID,

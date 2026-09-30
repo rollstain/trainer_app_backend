@@ -71,6 +71,11 @@ class HabitController(private val habitService: HabitService) {
         )
     }
 
+    @GetMapping("/coach/habits")
+    fun coachHabits(@CurrentUserId coachUserId: UUID): List<String> {
+        return habitService.titlesOfCoach(coachUserId = coachUserId)
+    }
+
     @PostMapping("/coach/clients/{clientUserId}/habits")
     fun createForClient(
         @CurrentUserId coachUserId: UUID,
