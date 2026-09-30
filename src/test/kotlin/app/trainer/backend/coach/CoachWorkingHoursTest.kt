@@ -1,6 +1,7 @@
 package app.trainer.backend.coach
 
 import app.trainer.backend.clientnotes.ClientNoteRepository
+import app.trainer.backend.program.ProgramService
 import app.trainer.backend.schedule.ScheduleService
 import app.trainer.backend.user.UserRepository
 import java.time.DayOfWeek
@@ -38,6 +39,7 @@ class CoachWorkingHoursTest {
     private val clientNoteRepository = mock(ClientNoteRepository::class.java)
     private val workingHourRepository = mock(CoachWorkingHourRepository::class.java)
     private val scheduleService = mock(ScheduleService::class.java)
+    private val programService = mock(ProgramService::class.java)
 
     private val service = CoachService(
         coachRepository = coachRepository,
@@ -46,6 +48,7 @@ class CoachWorkingHoursTest {
         clientNoteRepository = clientNoteRepository,
         workingHourRepository = workingHourRepository,
         scheduleService = scheduleService,
+        programService = programService,
     )
 
     @Test

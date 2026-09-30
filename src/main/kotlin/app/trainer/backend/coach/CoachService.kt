@@ -8,9 +8,11 @@ import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.config.encodeCursor
 import app.trainer.backend.config.pageSizeOf
+import app.trainer.backend.program.ProgramService
 import app.trainer.backend.schedule.ScheduleService
 import app.trainer.backend.user.UserRepository
 import java.time.DayOfWeek
+import java.time.ZoneId
 import java.util.UUID
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
@@ -26,6 +28,7 @@ class CoachService(
     private val clientNoteRepository: ClientNoteRepository,
     private val workingHourRepository: CoachWorkingHourRepository,
     private val scheduleService: ScheduleService,
+    private val programService: ProgramService,
 ) {
 
     @Transactional(readOnly = true)
@@ -65,6 +68,10 @@ class CoachService(
             .findClientUserIdsWithKind(coachId = coach.id, kind = ClientNoteKind.MEDICAL)
             .toSet()
         val usersById = userRepository.findAllById(links.map { it.userId }).associateBy { it.id }
+        val programs = programService.programSummariesOf(
+            clientUserIds = links.map { it.userId },
+            coachZone = ZoneId.of(coach.zoneId),
+        )
         val items = links.mapNotNull { link ->
             val user = usersById[link.userId] ?: return@mapNotNull null
             CoachClientResponse(
@@ -73,6 +80,7 @@ class CoachService(
                 status = link.status,
                 hasMedicalNotes = user.id in withMedicalNotes,
                 linkedAt = link.createdAt,
+                program = programs[user.id],
             )
         }
         val lastLink = links.lastOrNull()?.takeIf { hasMore }

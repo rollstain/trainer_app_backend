@@ -1,5 +1,6 @@
 package app.trainer.backend.coach
 
+import app.trainer.backend.program.ClientProgramSummaryResponse
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import java.time.DayOfWeek
@@ -18,6 +19,7 @@ data class CoachClientResponse(
     val status: CoachClientStatus,
     val hasMedicalNotes: Boolean,
     val linkedAt: Instant,
+    val program: ClientProgramSummaryResponse?,
 )
 
 data class CoachSummaryResponse(

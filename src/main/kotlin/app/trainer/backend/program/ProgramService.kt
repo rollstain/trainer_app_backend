@@ -272,6 +272,32 @@ class ProgramService(
     fun ownProgram(userId: UUID): ClientProgramResponse? = activeProgramOf(userId)
 
     @Transactional(readOnly = true)
+    fun programSummariesOf(
+        clientUserIds: Collection<UUID>,
+        coachZone: ZoneId,
+    ): Map<UUID, ClientProgramSummaryResponse> {
+        if (clientUserIds.isEmpty()) return emptyMap()
+        val assignments = assignmentRepository.findByClientUserIdInAndEndedAtIsNull(clientUserIds)
+        val programsById = programRepository
+            .findAllById(assignments.map { it.programId }.distinct())
+            .associateBy { it.id }
+        val today = LocalDate.now(clock.withZone(coachZone))
+        return assignments
+            .mapNotNull { assignment ->
+                val program = programsById[assignment.programId]
+                    ?.takeIf { it.archivedAt == null }
+                    ?: return@mapNotNull null
+                assignment.clientUserId to ClientProgramSummaryResponse(
+                    programId = program.id,
+                    programTitle = program.title,
+                    weeksCount = program.weeksCount,
+                    currentWeekNumber = weekNumberOn(program = program, assignment = assignment, date = today),
+                )
+            }
+            .toMap()
+    }
+
+    @Transactional(readOnly = true)
     fun plannedWorkouts(userId: UUID, from: LocalDate, to: LocalDate): List<PlannedWorkoutResponse> {
         if (from.isAfter(to)) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Начало периода позже конца")

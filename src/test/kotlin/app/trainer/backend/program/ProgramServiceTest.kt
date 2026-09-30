@@ -20,6 +20,7 @@ import app.trainer.backend.traininglog.TrainingLogEntryRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.Optional
 import java.util.UUID
@@ -198,6 +199,48 @@ class ProgramServiceTest {
 
         assertNull(program?.currentWeekNumber)
         assertNull(program?.todayDayTitle)
+    }
+
+    @Test
+    fun `the list of clients shows the program each is on and its current week`() {
+        `when`(assignmentRepository.findByClientUserIdInAndEndedAtIsNull(listOf(CLIENT_USER_ID)))
+            .thenReturn(listOf(assignment()))
+        `when`(programRepository.findAllById(listOf(PROGRAM_ID))).thenReturn(listOf(program()))
+
+        val summaries = serviceAt(NOW.plusSeconds(SECONDS_IN_A_WEEK))
+            .programSummariesOf(clientUserIds = listOf(CLIENT_USER_ID), coachZone = ZoneId.of("Europe/Moscow"))
+
+        assertEquals(
+            ClientProgramSummaryResponse(
+                programId = PROGRAM_ID,
+                programTitle = "Набор массы",
+                weeksCount = WEEKS_IN_PROGRAM,
+                currentWeekNumber = WEEKS_IN_PROGRAM,
+            ),
+            summaries[CLIENT_USER_ID],
+        )
+    }
+
+    @Test
+    fun `an archived program is not shown in the list of clients`() {
+        `when`(assignmentRepository.findByClientUserIdInAndEndedAtIsNull(listOf(CLIENT_USER_ID)))
+            .thenReturn(listOf(assignment()))
+        `when`(programRepository.findAllById(listOf(PROGRAM_ID))).thenReturn(listOf(program(archivedAt = NOW)))
+
+        val summaries = service.programSummariesOf(
+            clientUserIds = listOf(CLIENT_USER_ID),
+            coachZone = ZoneId.of("Europe/Moscow"),
+        )
+
+        assertTrue(summaries.isEmpty())
+    }
+
+    @Test
+    fun `an empty list of clients does not reach the database`() {
+        val summaries = service.programSummariesOf(clientUserIds = emptyList(), coachZone = ZoneId.of("Europe/Moscow"))
+
+        assertTrue(summaries.isEmpty())
+        verify(assignmentRepository, never()).findByClientUserIdInAndEndedAtIsNull(anyNonNull())
     }
 
     @Test
