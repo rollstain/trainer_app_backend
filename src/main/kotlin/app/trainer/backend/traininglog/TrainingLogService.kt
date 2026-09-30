@@ -437,6 +437,8 @@ class TrainingLogService(
             notes = entry.notes,
             sets = setResponses,
             totalVolumeGrams = totalVolumeOf(setResponses),
+            startedAt = entry.startedAt,
+            finishedAt = entry.finishedAt,
             durationSeconds = durationSecondsOf(startedAt = entry.startedAt, finishedAt = entry.finishedAt),
         )
     }
