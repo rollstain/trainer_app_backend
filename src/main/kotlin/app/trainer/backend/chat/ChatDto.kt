@@ -37,6 +37,7 @@ data class DialogResponse(
     val unreadCount: Long,
     val lastMessagePreview: String?,
     val lastMessageAt: Instant?,
+    val isReadOnly: Boolean,
 )
 
 data class MarkReadRequest(val readSeq: Long)
