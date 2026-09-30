@@ -68,4 +68,15 @@ class CoachController(private val coachService: CoachService) {
     fun coaches(@CurrentUserId userId: UUID): List<CoachSummaryResponse> {
         return coachService.coachesOfClient(userId = userId)
     }
+
+    @DeleteMapping("/me/coaches/{coachId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun leaveCoach(@CurrentUserId userId: UUID, @PathVariable coachId: UUID) {
+        coachService.leaveCoach(userId = userId, coachId = coachId)
+    }
+
+    @GetMapping("/coach/clients/past")
+    fun pastClients(@CurrentUserId coachUserId: UUID): List<CoachClientResponse> {
+        return coachService.pastClients(coachUserId = coachUserId)
+    }
 }

@@ -4,11 +4,14 @@ import app.trainer.backend.clientnotes.ClientNoteRepository
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.program.ClientProgramSummaryResponse
 import app.trainer.backend.program.ProgramService
+import app.trainer.backend.push.PushSender
 import app.trainer.backend.schedule.ScheduleService
 import app.trainer.backend.user.UserEntity
 import app.trainer.backend.user.UserRepository
+import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -32,6 +35,8 @@ private const val CURRENT_WEEK = 3
 @Suppress("UNCHECKED_CAST")
 private fun <T> anyNonNull(): T = ArgumentMatchers.any<T>() ?: (null as T)
 
+private val TEST_NOW: Instant = Instant.parse("2026-09-23T09:00:00Z")
+
 class CoachClientsPageTest {
 
     private val coachRepository = mock(CoachRepository::class.java)
@@ -41,6 +46,7 @@ class CoachClientsPageTest {
     private val workingHourRepository = mock(CoachWorkingHourRepository::class.java)
     private val scheduleService = mock(ScheduleService::class.java)
     private val programService = mock(ProgramService::class.java)
+    private val pushSender = mock(PushSender::class.java)
 
     private val service = CoachService(
         coachRepository = coachRepository,
@@ -50,6 +56,8 @@ class CoachClientsPageTest {
         workingHourRepository = workingHourRepository,
         scheduleService = scheduleService,
         programService = programService,
+        pushSender = pushSender,
+        clock = Clock.fixed(TEST_NOW, ZoneOffset.UTC),
     )
 
     @Test

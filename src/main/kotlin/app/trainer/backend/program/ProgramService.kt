@@ -261,6 +261,12 @@ class ProgramService(
         )
     }
 
+    @Transactional
+    fun endAssignmentQuietly(clientUserId: UUID) {
+        val assignment = assignmentRepository.findByClientUserIdAndEndedAtIsNull(clientUserId) ?: return
+        assignment.endedAt = Instant.now(clock)
+    }
+
     @Transactional(readOnly = true)
     fun clientProgram(coachUserId: UUID, clientUserId: UUID): ClientProgramResponse? {
         val coach = requireCoach(coachUserId)

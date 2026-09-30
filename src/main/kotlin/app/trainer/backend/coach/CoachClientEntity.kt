@@ -11,6 +11,8 @@ import java.util.UUID
 
 enum class CoachClientStatus { ACTIVE, ARCHIVED }
 
+enum class LinkEndedBy { CLIENT, COACH }
+
 @Entity
 @Table(name = "coach_clients")
 class CoachClientEntity(
@@ -31,4 +33,11 @@ class CoachClientEntity(
 
     @Column(name = "created_at")
     val createdAt: Instant,
+
+    @Column(name = "ended_at")
+    var endedAt: Instant? = null,
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "ended_by")
+    var endedBy: LinkEndedBy? = null,
 )

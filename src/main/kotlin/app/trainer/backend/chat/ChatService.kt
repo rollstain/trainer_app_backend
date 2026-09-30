@@ -1,5 +1,7 @@
 package app.trainer.backend.chat
 
+import app.trainer.backend.coach.CoachClientRepository
+import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.EXTRA_ROW_TO_DETECT_NEXT_PAGE
 import app.trainer.backend.config.Page
@@ -38,6 +40,7 @@ class ChatService(
     private val messageRepository: MessageRepository,
     private val dialogReadRepository: DialogReadRepository,
     private val coachRepository: CoachRepository,
+    private val coachClientRepository: CoachClientRepository,
     private val userRepository: UserRepository,
     private val mediaFileService: MediaFileService,
     private val eventPublisher: ApplicationEventPublisher,
@@ -55,7 +58,8 @@ class ChatService(
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Пустое сообщение без вложений")
         }
 
-        requireDialogAccess(dialogId = dialogId, userId = senderUserId)
+        val openDialog = requireDialogAccess(dialogId = dialogId, userId = senderUserId)
+        requireLinkAlive(openDialog)
         val messageId = UUID.randomUUID()
         val attachments = mediaFileService.link(
             mediaFileIds = request.attachmentIds,
@@ -217,6 +221,16 @@ class ChatService(
         val dialog = dialogRepository.findByIdOrNull(dialogId) ?: dialogNotFound()
         requireParticipant(dialog = dialog, userId = userId)
         return dialog
+    }
+
+    private fun requireLinkAlive(dialog: DialogEntity) {
+        val link = coachClientRepository.findByCoachIdAndUserId(
+            coachId = dialog.coachId,
+            userId = dialog.clientUserId,
+        )
+        if (link == null || link.status != CoachClientStatus.ACTIVE) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Переписка закончилась вместе со связкой")
+        }
     }
 
     private fun requireParticipant(dialog: DialogEntity, userId: UUID) {
