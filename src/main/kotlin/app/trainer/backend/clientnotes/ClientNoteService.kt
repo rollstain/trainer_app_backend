@@ -24,7 +24,7 @@ class ClientNoteService(
     @Transactional(readOnly = true)
     fun notesOfClient(coachUserId: UUID, clientUserId: UUID): List<ClientNoteResponse> {
         val coach = requireCoach(coachUserId)
-        requireActiveClient(coach = coach, clientUserId = clientUserId)
+        requireOwnOrPastClient(coach = coach, clientUserId = clientUserId)
         return noteRepository
             .findByCoachIdAndClientUserIdAndArchivedAtIsNull(coachId = coach.id, clientUserId = clientUserId)
             .sortedWith(byImportance())
@@ -113,6 +113,11 @@ class ClientNoteService(
         if (link == null || link.status != CoachClientStatus.ACTIVE) {
             throw ResponseStatusException(HttpStatus.FORBIDDEN, "Это не ваш подопечный")
         }
+    }
+
+    private fun requireOwnOrPastClient(coach: CoachEntity, clientUserId: UUID) {
+        coachClientRepository.findByCoachIdAndUserId(coachId = coach.id, userId = clientUserId)
+            ?: throw ResponseStatusException(HttpStatus.FORBIDDEN, "Это не ваш подопечный")
     }
 
     private fun toResponse(note: ClientNoteEntity): ClientNoteResponse = ClientNoteResponse(
