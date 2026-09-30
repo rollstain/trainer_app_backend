@@ -136,3 +136,10 @@ data class ProgramWeekDayResponse(
 )
 
 data class ClientProgramStateResponse(val program: ClientProgramResponse?)
+
+data class ClientProgramSummaryResponse(
+    val programId: UUID,
+    val programTitle: String,
+    val weeksCount: Int,
+    val currentWeekNumber: Int?,
+)
