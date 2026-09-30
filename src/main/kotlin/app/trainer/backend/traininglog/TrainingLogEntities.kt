@@ -83,6 +83,12 @@ class TrainingLogEntryEntity(
 
     @Column(name = "updated_at")
     var updatedAt: Instant,
+
+    @Column(name = "started_at")
+    var startedAt: Instant? = null,
+
+    @Column(name = "finished_at")
+    var finishedAt: Instant? = null,
 )
 
 @Entity

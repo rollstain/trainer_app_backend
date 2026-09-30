@@ -1,8 +1,10 @@
 package app.trainer.backend.traininglog
 
+import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Modifying
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 
@@ -93,6 +95,90 @@ interface ClientLastEntry {
 }
 
 interface TrainingLogEntryRepository : JpaRepository<TrainingLogEntryEntity, UUID> {
+
+    @Query(
+        value = """
+            select e.* from training_log_entries e
+            join coach_clients l on l.user_id = e.client_user_id
+            left join coach_training_log_views v on v.entry_id = e.id and v.coach_id = :coachId
+            where l.coach_id = :coachId
+              and l.status = 'ACTIVE'
+              and exists (select 1 from training_log_sets s where s.entry_id = e.id)
+              and (:unseenOnly = false or v.seen_at is null or v.seen_at < e.updated_at)
+              and (
+                cast(:afterUpdatedAt as text) is null
+                or (e.updated_at, e.id) < (cast(:afterUpdatedAt as timestamptz), cast(:afterId as uuid))
+              )
+            order by e.updated_at desc, e.id desc
+            limit :pageSize
+        """,
+        nativeQuery = true,
+    )
+    fun findFeedPage(
+        @Param("coachId") coachId: UUID,
+        @Param("unseenOnly") unseenOnly: Boolean,
+        @Param("afterUpdatedAt") afterUpdatedAt: String?,
+        @Param("afterId") afterId: UUID?,
+        @Param("pageSize") pageSize: Int,
+    ): List<TrainingLogEntryEntity>
+
+    @Query(
+        value = """
+            select count(*) from training_log_entries e
+            join coach_clients l on l.user_id = e.client_user_id
+            left join coach_training_log_views v on v.entry_id = e.id and v.coach_id = :coachId
+            where l.coach_id = :coachId
+              and l.status = 'ACTIVE'
+              and exists (select 1 from training_log_sets s where s.entry_id = e.id)
+              and (v.seen_at is null or v.seen_at < e.updated_at)
+        """,
+        nativeQuery = true,
+    )
+    fun countUnseen(@Param("coachId") coachId: UUID): Long
+
+    @Query(
+        value = """
+            select v.entry_id from coach_training_log_views v
+            join training_log_entries e on e.id = v.entry_id
+            where v.coach_id = :coachId
+              and v.entry_id in (:entryIds)
+              and v.seen_at >= e.updated_at
+        """,
+        nativeQuery = true,
+    )
+    fun findSeenEntryIds(
+        @Param("coachId") coachId: UUID,
+        @Param("entryIds") entryIds: Collection<UUID>,
+    ): List<UUID>
+
+    @Query(
+        value = """
+            select exists (
+              select 1 from training_log_entries e
+              join coach_clients l on l.user_id = e.client_user_id
+              where e.id = :entryId
+                and l.coach_id = :coachId
+                and l.status = 'ACTIVE'
+            )
+        """,
+        nativeQuery = true,
+    )
+    fun isEntryOfActiveClient(@Param("coachId") coachId: UUID, @Param("entryId") entryId: UUID): Boolean
+
+    @Modifying
+    @Query(
+        value = """
+            insert into coach_training_log_views (coach_id, entry_id, seen_at)
+            values (:coachId, :entryId, :seenAt)
+            on conflict (coach_id, entry_id) do update set seen_at = excluded.seen_at
+        """,
+        nativeQuery = true,
+    )
+    fun markSeen(
+        @Param("coachId") coachId: UUID,
+        @Param("entryId") entryId: UUID,
+        @Param("seenAt") seenAt: Instant,
+    )
 
     fun findByClientUserIdAndEntryDate(clientUserId: UUID, entryDate: LocalDate): TrainingLogEntryEntity?
 
