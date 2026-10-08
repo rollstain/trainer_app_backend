@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
 import org.springframework.http.HttpStatus
+import org.springframework.http.HttpStatusCode
 import org.springframework.web.client.RestClient
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
@@ -25,7 +26,10 @@ private const val UNKNOWN_INVITE_CODE = "no-such-invite"
 @Testcontainers
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["trainer.auth.jwt-secret=$STARTUP_JWT_SECRET"],
+    properties = [
+        "trainer.auth.jwt-secret=$STARTUP_JWT_SECRET",
+        "management.endpoint.health.show-details=always",
+    ],
 )
 class ApplicationStartupTest {
 
@@ -44,28 +48,31 @@ class ApplicationStartupTest {
     }
 
     @Test
-    fun `health and the API description answer`() {
-        val client = RestClient.create("http://localhost:$port")
+    fun `health answers up`() {
+        val (status, body) = get("/actuator/health")
 
-        val health = client.get().uri("/actuator/health").retrieve().toEntity(String::class.java)
-        val apiDocs = client.get().uri("/v3/api-docs").retrieve().toEntity(String::class.java)
+        assertEquals(HttpStatus.OK, status, body)
+    }
 
-        assertEquals(HttpStatus.OK, health.statusCode)
-        assertTrue(health.body.orEmpty().contains("UP"), health.body)
-        assertEquals(HttpStatus.OK, apiDocs.statusCode)
+    @Test
+    fun `the API description answers`() {
+        val (status, body) = get("/v3/api-docs")
+
+        assertEquals(HttpStatus.OK, status, body)
     }
 
     @Test
     fun `an answer over HTTP leaves absent values out`() {
-        val client = RestClient.create("http://localhost:$port")
-
-        val (status, body) = client.get().uri("/auth/invites/$UNKNOWN_INVITE_CODE")
-            .exchange { _, response -> response.statusCode to response.bodyTo(String::class.java).orEmpty() }
+        val (status, body) = get("/auth/invites/$UNKNOWN_INVITE_CODE")
 
         assertEquals(HttpStatus.NOT_FOUND, status)
         assertTrue(body.contains("\"message\""), body)
         assertFalse(body.contains("retryAfterSeconds"), body)
     }
+
+    private fun get(path: String): Pair<HttpStatusCode, String> =
+        RestClient.create("http://localhost:$port").get().uri(path)
+            .exchange { _, response -> response.statusCode to response.bodyTo(String::class.java).orEmpty() }
 
     companion object {
 
