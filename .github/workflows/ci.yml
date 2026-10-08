@@ -39,6 +39,9 @@ jobs:
       - name: Тесты
         run: ./gradlew test --console=plain
 
+      - name: Старт приложения на Postgres
+        run: ./gradlew startupTest --console=plain
+
       - name: Сборка jar
         run: ./gradlew bootJar --console=plain
 

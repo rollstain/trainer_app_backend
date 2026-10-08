@@ -10,8 +10,6 @@ import app.trainer.backend.config.pageSizeOf
 import app.trainer.backend.push.NotificationAudience
 import app.trainer.backend.push.NotificationReason
 import app.trainer.backend.push.PushTexts
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Clock
 import java.time.Instant
 import java.util.Locale
@@ -20,6 +18,8 @@ import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.server.ResponseStatusException
+import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.ObjectMapper
 
 private const val NOTIFICATIONS_PER_PAGE = 30
 

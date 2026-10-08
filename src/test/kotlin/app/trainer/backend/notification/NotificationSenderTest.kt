@@ -5,7 +5,6 @@ import app.trainer.backend.push.PushChannel
 import app.trainer.backend.push.PushDelivery
 import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushText
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -19,6 +18,7 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import tools.jackson.databind.ObjectMapper
 
 private val ANNA: UUID = UUID.fromString("93000000-0000-0000-0000-000000000001")
 private val MAX: UUID = UUID.fromString("93000000-0000-0000-0000-000000000002")

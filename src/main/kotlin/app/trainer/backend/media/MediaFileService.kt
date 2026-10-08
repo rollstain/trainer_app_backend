@@ -204,7 +204,7 @@ class MediaFileService(
         if (stored.sizeBytes != file.sizeBytes) {
             rejectUpload(
                 file = file,
-                status = HttpStatus.PAYLOAD_TOO_LARGE,
+                status = HttpStatus.CONTENT_TOO_LARGE,
                 reason = "Размер загруженного файла не совпадает с заявленным: ${stored.sizeBytes}",
             )
         }
@@ -250,7 +250,7 @@ class MediaFileService(
     private fun requireAllowedSize(sizeBytes: Long) {
         if (sizeBytes > properties.maxFileSizeBytes) {
             throw ResponseStatusException(
-                HttpStatus.PAYLOAD_TOO_LARGE,
+                HttpStatus.CONTENT_TOO_LARGE,
                 "Размер файла больше допустимого: $sizeBytes",
             )
         }

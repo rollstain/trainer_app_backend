@@ -1,6 +1,5 @@
 package app.trainer.backend.chat
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import org.springframework.stereotype.Component
@@ -9,6 +8,7 @@ import org.springframework.web.socket.TextMessage
 import org.springframework.web.socket.WebSocketSession
 import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator
 import org.springframework.web.socket.handler.TextWebSocketHandler
+import tools.jackson.databind.ObjectMapper
 
 const val WEB_SOCKET_USER_ID_ATTRIBUTE = "userId"
 
