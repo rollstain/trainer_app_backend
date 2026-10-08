@@ -29,6 +29,7 @@ private const val UNKNOWN_INVITE_CODE = "no-such-invite"
     properties = [
         "trainer.auth.jwt-secret=$STARTUP_JWT_SECRET",
         "management.endpoint.health.show-details=always",
+        "management.health.mail.enabled=false",
     ],
 )
 class ApplicationStartupTest {
