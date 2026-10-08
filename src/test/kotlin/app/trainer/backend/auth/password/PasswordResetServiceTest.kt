@@ -201,7 +201,7 @@ class PasswordResetServiceTest {
 
     private fun credential() = PasswordCredentialEntity(
         userId = USER_ID,
-        passwordHash = passwordEncoder.encode(PASSWORD),
+        passwordHash = checkNotNull(passwordEncoder.encode(PASSWORD)) { "BCrypt не вернул хеш" },
         failedAttempts = 0,
         lockedUntil = null,
         lockStreak = 0,

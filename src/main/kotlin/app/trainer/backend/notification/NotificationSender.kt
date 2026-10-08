@@ -3,11 +3,11 @@ package app.trainer.backend.notification
 import app.trainer.backend.push.PushDelivery
 import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 import org.springframework.stereotype.Service
+import tools.jackson.databind.ObjectMapper
 
 @Service
 class NotificationSender(

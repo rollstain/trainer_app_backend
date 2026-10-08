@@ -18,12 +18,15 @@ class PasswordStore(
         passwordEncoder.matches(password, credential.passwordHash)
 
     fun save(userId: UUID, password: String, now: Instant) {
+        val passwordHash = checkNotNull(passwordEncoder.encode(password)) {
+            "PasswordEncoder не вернул хеш для заданного пароля"
+        }
         val credential = credentialRepository.findByIdOrNull(userId)
         if (credential == null) {
             credentialRepository.save(
                 PasswordCredentialEntity(
                     userId = userId,
-                    passwordHash = passwordEncoder.encode(password),
+                    passwordHash = passwordHash,
                     failedAttempts = 0,
                     lockedUntil = null,
                     lockStreak = 0,
@@ -32,7 +35,7 @@ class PasswordStore(
             )
             return
         }
-        credential.passwordHash = passwordEncoder.encode(password)
+        credential.passwordHash = passwordHash
         credential.failedAttempts = 0
         credential.lockedUntil = null
         credential.lockStreak = 0

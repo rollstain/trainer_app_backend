@@ -1,7 +1,7 @@
 package app.trainer.backend.config
 
 import com.fasterxml.jackson.annotation.JsonInclude
-import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -9,8 +9,12 @@ import org.springframework.context.annotation.Configuration
 class JsonConfig {
 
     @Bean
-    fun absentValuesOmitted(): Jackson2ObjectMapperBuilderCustomizer =
-        Jackson2ObjectMapperBuilderCustomizer { builder ->
-            builder.serializationInclusion(JsonInclude.Include.NON_NULL)
+    fun absentValuesOmitted(): JsonMapperBuilderCustomizer =
+        JsonMapperBuilderCustomizer { builder ->
+            builder.changeDefaultPropertyInclusion { inclusion ->
+                inclusion
+                    .withValueInclusion(JsonInclude.Include.NON_NULL)
+                    .withContentInclusion(JsonInclude.Include.NON_NULL)
+            }
         }
 }

@@ -123,7 +123,8 @@ abstract class SignedTokenVerifier(
         } catch (failure: JwtException) {
             throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "$provider не подтвердил вход", failure)
         }
-        if (jwt.issuer?.toString() != issuer || !jwt.audience.contains(audience)) tokenRejected(provider)
+        val audiences = jwt.audience.orEmpty()
+        if (jwt.issuer?.toString() != issuer || audience !in audiences) tokenRejected(provider)
         val subject = jwt.subject ?: tokenRejected(provider)
         return VerifiedIdentity(
             provider = provider,

@@ -7,7 +7,6 @@ import app.trainer.backend.push.DEFAULT_PUSH_LOCALE
 import app.trainer.backend.push.NotificationReason
 import app.trainer.backend.push.PushText
 import app.trainer.backend.push.PushTexts
-import com.fasterxml.jackson.databind.ObjectMapper
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -25,6 +24,7 @@ import org.mockito.Mockito.`when`
 import org.springframework.context.support.ResourceBundleMessageSource
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
+import tools.jackson.databind.ObjectMapper
 
 private val ANNA: UUID = UUID.fromString("94000000-0000-0000-0000-000000000001")
 private val IGOR: UUID = UUID.fromString("94000000-0000-0000-0000-000000000002")
