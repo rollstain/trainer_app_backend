@@ -67,6 +67,7 @@ dependencies {
     implementation(libs.firebase.admin)
     runtimeOnly(libs.flyway.postgresql)
     runtimeOnly(libs.postgresql)
+    runtimeOnly("com.fasterxml.jackson.module:jackson-module-kotlin")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")

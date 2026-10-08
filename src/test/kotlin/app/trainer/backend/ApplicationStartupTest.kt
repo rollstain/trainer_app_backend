@@ -17,6 +17,8 @@ import org.springframework.web.client.RestClient
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.postgresql.PostgreSQLContainer
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
 
 private const val PRODUCTION_POSTGRES_IMAGE = "postgres:16-alpine"
 private const val STARTUP_JWT_SECRET = "startup-test-secret-not-used-anywhere-else"
@@ -40,6 +42,9 @@ class ApplicationStartupTest {
     @Autowired
     private lateinit var flyway: Flyway
 
+    @Autowired
+    private lateinit var jsonMapper: JsonMapper
+
     @Test
     fun `the service starts on an empty database with every migration applied`() {
         val migrations = flyway.info()
@@ -56,10 +61,16 @@ class ApplicationStartupTest {
     }
 
     @Test
-    fun `the API description answers`() {
+    fun `the API description requires non-null fields and leaves absent ones optional rather than null`() {
         val (status, body) = get("/v3/api-docs")
+        val document: JsonNode = jsonMapper.readTree(body)
+        val errorSchema = document.path("components").path("schemas").path("ApiErrorResponse")
+        val requiredFields = errorSchema.path("required").values().map { field -> field.asString() }.toSet()
+        val retryAfter = errorSchema.path("properties").path("retryAfterSeconds")
 
         assertEquals(HttpStatus.OK, status, body)
+        assertEquals(setOf("status", "message", "fieldErrors"), requiredFields, errorSchema.toString())
+        assertFalse(retryAfter.toString().contains("null"), retryAfter.toString())
     }
 
     @Test
