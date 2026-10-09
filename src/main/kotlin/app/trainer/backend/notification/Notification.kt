@@ -41,6 +41,9 @@ class NotificationEntity(
 
     @Column(name = "read_at")
     var readAt: Instant?,
+
+    @Column(name = "held_until")
+    val heldUntil: Instant?,
 )
 
 @Entity
@@ -91,6 +94,23 @@ interface NotificationRepository : JpaRepository<NotificationEntity, UUID> {
     @Modifying
     @Query("update NotificationEntity n set n.readAt = :readAt where n.userId = :userId and n.readAt is null")
     fun markAllRead(@Param("userId") userId: UUID, @Param("readAt") readAt: Instant): Int
+
+    @Query(
+        "select n.heldUntil as heldUntil, n.kind as kind, count(n) as total from NotificationEntity n " +
+            "where n.userId = :userId and n.heldUntil > :since and n.heldUntil <= :now " +
+            "group by n.heldUntil, n.kind"
+    )
+    fun heldCounts(
+        @Param("userId") userId: UUID,
+        @Param("since") since: Instant,
+        @Param("now") now: Instant,
+    ): List<HeldNotifications>
+}
+
+interface HeldNotifications {
+    val heldUntil: Instant
+    val kind: PushText
+    val total: Long
 }
 
 interface NotificationSettingRepository : JpaRepository<NotificationSettingEntity, UUID> {

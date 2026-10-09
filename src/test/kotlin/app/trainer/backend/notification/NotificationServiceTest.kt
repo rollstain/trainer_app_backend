@@ -183,5 +183,6 @@ class NotificationServiceTest {
         data = "{\"slotId\":\"slot\"}",
         createdAt = createdAt,
         readAt = readAt,
+        heldUntil = null,
     )
 }

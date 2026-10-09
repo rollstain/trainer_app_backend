@@ -4,7 +4,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
-private const val DIGEST_CHECK_INTERVAL_MS = 3_600_000L
+private const val DIGEST_CHECK_INTERVAL_MS = 300_000L
 
 @Component
 class CoachDigestJob(private val coachDigestService: CoachDigestService) {

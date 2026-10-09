@@ -36,6 +36,7 @@ class CoachService(
     private val userRepository: UserRepository,
     private val clientNoteRepository: ClientNoteRepository,
     private val workingHourRepository: CoachWorkingHourRepository,
+    private val quietHoursRepository: CoachQuietHoursRepository,
     private val scheduleService: ScheduleService,
     private val programService: ProgramService,
     private val pushSender: PushSender,
@@ -120,7 +121,34 @@ class CoachService(
         request.diaryRemindersEnabled?.let { coach.diaryRemindersEnabled = it }
         request.checkInRemindersEnabled?.let { coach.checkInRemindersEnabled = it }
         request.workingHours?.let { replaceWorkingHours(coachId = coach.id, workingHours = it) }
+        request.quietHours?.let { saveQuietHours(coachId = coach.id, quietHours = it) }
         return toPolicyResponse(coach)
+    }
+
+    private fun saveQuietHours(coachId: UUID, quietHours: QuietHoursDto) {
+        if (quietHours.startsAt == quietHours.endsAt) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Тихие часы начинаются и кончаются в разное время")
+        }
+        val stored = quietHoursRepository.findByIdOrNull(coachId)
+        if (stored == null) {
+            quietHoursRepository.save(
+                CoachQuietHoursEntity(
+                    coachId = coachId,
+                    enabled = quietHours.enabled,
+                    startsAt = quietHours.startsAt,
+                    endsAt = quietHours.endsAt,
+                )
+            )
+            return
+        }
+        stored.enabled = quietHours.enabled
+        stored.startsAt = quietHours.startsAt
+        stored.endsAt = quietHours.endsAt
+    }
+
+    private fun quietHoursOf(coachId: UUID): QuietHoursDto? {
+        val stored = quietHoursRepository.findByIdOrNull(coachId) ?: return null
+        return QuietHoursDto(enabled = stored.enabled, startsAt = stored.startsAt, endsAt = stored.endsAt)
     }
 
     private fun replaceWorkingHours(coachId: UUID, workingHours: List<WorkingDayDto>) {
@@ -162,6 +190,7 @@ class CoachService(
         diaryRemindersEnabled = coach.diaryRemindersEnabled,
         checkInRemindersEnabled = coach.checkInRemindersEnabled,
         workingHours = workingHoursOf(coach.id),
+        quietHours = quietHoursOf(coach.id),
     )
 
     @Transactional

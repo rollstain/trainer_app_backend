@@ -53,6 +53,7 @@ class CoachWorkingHoursTest {
         userRepository = userRepository,
         clientNoteRepository = clientNoteRepository,
         workingHourRepository = workingHourRepository,
+        quietHoursRepository = mock(CoachQuietHoursRepository::class.java),
         scheduleService = scheduleService,
         programService = programService,
         pushSender = pushSender,
@@ -179,6 +180,7 @@ class CoachWorkingHoursTest {
         diaryRemindersEnabled = null,
         checkInRemindersEnabled = null,
         workingHours = workingHours,
+        quietHours = null,
     )
 
     private fun storedDay(dayOfWeek: Int, opensAt: LocalTime, closesAt: LocalTime) = CoachWorkingHourEntity(

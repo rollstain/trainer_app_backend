@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param
 interface CoachRepository : JpaRepository<CoachEntity, UUID> {
 
     fun findByUserId(userId: UUID): CoachEntity?
+
+    fun findByUserIdIn(userIds: Collection<UUID>): List<CoachEntity>
 }
 
 interface CoachClientRepository : JpaRepository<CoachClientEntity, UUID> {

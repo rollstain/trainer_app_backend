@@ -57,6 +57,7 @@ class CoachServiceArchiveTest {
         userRepository = userRepository,
         clientNoteRepository = clientNoteRepository,
         workingHourRepository = workingHourRepository,
+        quietHoursRepository = mock(CoachQuietHoursRepository::class.java),
         scheduleService = scheduleService,
         programService = programService,
         pushSender = pushSender,

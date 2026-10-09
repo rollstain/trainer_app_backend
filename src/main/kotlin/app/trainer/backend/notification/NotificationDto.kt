@@ -14,6 +14,7 @@ data class NotificationResponse(
     val data: Map<String, String>,
     val createdAt: Instant,
     val isRead: Boolean,
+    val heldUntil: Instant?,
 )
 
 data class UnreadNotificationsResponse(

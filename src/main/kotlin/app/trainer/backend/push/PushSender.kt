@@ -200,6 +200,12 @@ enum class PushText(
         keptInHistory = true,
         reason = NotificationReason.NEW_PROGRAMS,
     ),
+    MORNING_SUMMARY(
+        "push.coach.morning.title",
+        "push.coach.morning.body",
+        keptInHistory = false,
+        reason = null,
+    ),
     ;
 
     val collapsesIntoDigest: Boolean
