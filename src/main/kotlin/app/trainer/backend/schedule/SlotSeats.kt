@@ -56,7 +56,7 @@ class SlotSeats(
         return startsAt.atZone(zone).format(SLOT_TIME_FORMAT)
     }
 
-    private fun notifyWaitlist(slot: TrainingSlotEntity) {
+    fun notifyWaitlist(slot: TrainingSlotEntity) {
         val waiting = waitlistRepository.findBySlotIdOrderByCreatedAtAsc(slot.id)
         if (waiting.isEmpty()) return
         val now = Instant.now(clock)
