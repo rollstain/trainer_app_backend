@@ -131,6 +131,7 @@ class NotificationService(
             heldUntil = notification.heldUntil,
             quietFrom = notification.quietFrom,
             quietUntil = notification.quietUntil,
+            pushedAt = notification.pushedAt,
         )
     }
 }

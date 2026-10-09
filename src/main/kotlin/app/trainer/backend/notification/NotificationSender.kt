@@ -28,15 +28,29 @@ class NotificationSender(
         val now = Instant.now(clock)
         val quiet = quietSpansOf(recipients = recipients, now = now)
         if (message.text.collapsesIntoDigest) {
-            keep(recipients = recipients, message = message, now = now, quiet = quiet, held = emptySet())
+            keep(
+                recipients = recipients,
+                message = message,
+                now = now,
+                quiet = quiet,
+                held = emptySet(),
+                pushed = emptySet(),
+            )
             return
         }
         val muted = mutedOf(recipients = recipients, message = message)
         val silenced = if (message.text.reason == NotificationReason.CHANGE_REQUESTS) emptySet() else quiet.keys
-        if (message.text.keptInHistory) {
-            keep(recipients = recipients, message = message, now = now, quiet = quiet, held = silenced - muted)
-        }
         val pushed = recipients.filterNot { it in muted || it in silenced }
+        if (message.text.keptInHistory) {
+            keep(
+                recipients = recipients,
+                message = message,
+                now = now,
+                quiet = quiet,
+                held = silenced - muted,
+                pushed = pushed.toSet(),
+            )
+        }
         if (pushed.isNotEmpty()) delivery.send(userIds = pushed, message = message)
     }
 
@@ -63,6 +77,7 @@ class NotificationSender(
         now: Instant,
         quiet: Map<UUID, QuietSpan>,
         held: Set<UUID>,
+        pushed: Set<UUID>,
     ) {
         val args = objectMapper.writeValueAsString(message.args)
         val data = objectMapper.writeValueAsString(message.data)
@@ -79,6 +94,7 @@ class NotificationSender(
                     heldUntil = if (userId in held) quiet[userId]?.until else null,
                     quietFrom = quiet[userId]?.from,
                     quietUntil = quiet[userId]?.until,
+                    pushedAt = if (userId in pushed) now else null,
                 )
             }
         )

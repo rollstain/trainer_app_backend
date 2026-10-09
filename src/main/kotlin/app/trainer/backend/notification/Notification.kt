@@ -50,6 +50,9 @@ class NotificationEntity(
 
     @Column(name = "quiet_until")
     val quietUntil: Instant?,
+
+    @Column(name = "pushed_at")
+    val pushedAt: Instant?,
 )
 
 @Entity
