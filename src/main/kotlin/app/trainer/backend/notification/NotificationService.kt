@@ -128,6 +128,7 @@ class NotificationService(
             data = objectMapper.readValue(notification.data, DATA_TYPE),
             createdAt = notification.createdAt,
             isRead = notification.readAt != null,
+            heldUntil = notification.heldUntil,
         )
     }
 }

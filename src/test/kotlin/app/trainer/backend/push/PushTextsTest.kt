@@ -10,6 +10,13 @@ private const val MESSAGES_BASENAME = "messages"
 private const val MESSAGES_ENCODING = "UTF-8"
 private val ENGLISH: Locale = Locale.forLanguageTag("en")
 private val SAMPLE_ARGS = listOf("18:00", "Дмитрием Роговым")
+private const val TWO = 2L
+private const val ONE = 1L
+private const val FIVE = 5L
+private const val ELEVEN = 11L
+private const val TWENTY_ONE = 21L
+private const val TWENTY_TWO = 22L
+private val SUMMARY_ARGS = listOf(summaryArgOf(SummaryPart.CHECK_INS, TWO))
 
 class PushTextsTest {
 
@@ -24,8 +31,9 @@ class PushTextsTest {
     @Test
     fun `every push has a text in both languages`() {
         PushText.entries.forEach { text ->
-            val russian = pushTexts.render(text = text, args = SAMPLE_ARGS, locale = DEFAULT_PUSH_LOCALE)
-            val english = pushTexts.render(text = text, args = SAMPLE_ARGS, locale = ENGLISH)
+            val args = if (text == PushText.MORNING_SUMMARY) SUMMARY_ARGS else SAMPLE_ARGS
+            val russian = pushTexts.render(text = text, args = args, locale = DEFAULT_PUSH_LOCALE)
+            val english = pushTexts.render(text = text, args = args, locale = ENGLISH)
 
             assertTrue(russian.title.isNotBlank(), "нет русского заголовка для $text")
             assertTrue(russian.body.isNotBlank(), "нет русского текста для $text")
@@ -55,5 +63,42 @@ class PushTextsTest {
     fun `a device language is understood with and without a region`() {
         assertEquals("en", localeOfToken("en").language)
         assertEquals("en", localeOfToken("en-US").language)
+    }
+
+    @Test
+    fun `the morning summary counts the night in the language of the device`() {
+        val night = listOf(
+            summaryArgOf(SummaryPart.CHECK_INS, TWO),
+            summaryArgOf(SummaryPart.FORM_CHECKS, ONE),
+            summaryArgOf(SummaryPart.SLOT_BOOKINGS, FIVE),
+        )
+
+        val russian = pushTexts.render(PushText.MORNING_SUMMARY, night, DEFAULT_PUSH_LOCALE)
+        val english = pushTexts.render(PushText.MORNING_SUMMARY, night, ENGLISH)
+
+        assertEquals("Утренняя сводка", russian.title)
+        assertEquals("За ночь: 2 чек-ина, 1 разбор техники, 5 записей на слоты", russian.body)
+        assertEquals("Overnight: 2 check-ins, 1 form review, 5 slot bookings", english.body)
+    }
+
+    @Test
+    fun `russian counts follow the last digits`() {
+        val bodies = listOf(ONE, ELEVEN, TWENTY_ONE, TWENTY_TWO).map { count ->
+            pushTexts.render(
+                PushText.MORNING_SUMMARY,
+                listOf(summaryArgOf(SummaryPart.CHECK_INS, count)),
+                DEFAULT_PUSH_LOCALE,
+            ).body
+        }
+
+        assertEquals(
+            listOf(
+                "За ночь: 1 чек-ин",
+                "За ночь: 11 чек-инов",
+                "За ночь: 21 чек-ин",
+                "За ночь: 22 чек-ина",
+            ),
+            bodies,
+        )
     }
 }

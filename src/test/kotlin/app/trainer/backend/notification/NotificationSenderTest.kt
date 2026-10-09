@@ -1,5 +1,7 @@
 package app.trainer.backend.notification
 
+import app.trainer.backend.coach.CoachQuietHoursLookup
+import app.trainer.backend.coach.QuietWindow
 import app.trainer.backend.push.NotificationReason
 import app.trainer.backend.push.PushChannel
 import app.trainer.backend.push.PushDelivery
@@ -7,9 +9,12 @@ import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushText
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalTime
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers
@@ -23,6 +28,10 @@ import tools.jackson.databind.ObjectMapper
 private val ANNA: UUID = UUID.fromString("93000000-0000-0000-0000-000000000001")
 private val MAX: UUID = UUID.fromString("93000000-0000-0000-0000-000000000002")
 private val NOW: Instant = Instant.parse("2026-09-19T09:00:00Z")
+private val MORNING: Instant = Instant.parse("2026-09-19T10:00:00Z")
+private val QUIET_STARTS: LocalTime = LocalTime.of(10, 0)
+private val QUIET_ENDS: LocalTime = LocalTime.of(13, 0)
+private val MOSCOW: ZoneId = ZoneId.of("Europe/Moscow")
 
 @Suppress("UNCHECKED_CAST")
 private fun <T> anyNonNull(): T = ArgumentMatchers.any<T>() ?: (null as T)
@@ -35,11 +44,13 @@ class NotificationSenderTest {
     private val delivery = mock(PushDelivery::class.java)
     private val notificationRepository = mock(NotificationRepository::class.java)
     private val settingRepository = mock(NotificationSettingRepository::class.java)
+    private val quietHours = mock(CoachQuietHoursLookup::class.java)
 
     private val sender = NotificationSender(
         delivery = delivery,
         notificationRepository = notificationRepository,
         settingRepository = settingRepository,
+        quietHours = quietHours,
         objectMapper = ObjectMapper(),
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
@@ -128,6 +139,63 @@ class NotificationSenderTest {
 
         verifyNoInteractions(settingRepository)
         verify(delivery).send(listOf(ANNA), diary)
+    }
+
+    @Test
+    fun `a coach in quiet hours keeps the event till morning without a push`() {
+        givenQuiet(ANNA)
+        val booked = message(PushText.SLOT_BOOKED)
+
+        sender.send(userIds = listOf(ANNA, MAX), message = booked)
+
+        val kept = keptNotifications()
+        assertEquals(MORNING, kept.single { it.userId == ANNA }.heldUntil)
+        assertNull(kept.single { it.userId == MAX }.heldUntil)
+        verify(delivery).send(listOf(MAX), booked)
+    }
+
+    @Test
+    fun `a cancel request reaches a coach in quiet hours at once`() {
+        givenQuiet(ANNA)
+        val request = message(PushText.CANCEL_REQUESTED)
+
+        sender.send(userIds = listOf(ANNA), message = request)
+
+        assertNull(keptNotifications().single().heldUntil)
+        verify(delivery).send(listOf(ANNA), request)
+    }
+
+    @Test
+    fun `a muted reason is not saved for the morning`() {
+        givenQuiet(ANNA)
+        `when`(
+            settingRepository.findByUserIdInAndReasonAndPushEnabledFalse(
+                listOf(ANNA),
+                NotificationReason.SLOT_BOOKINGS,
+            )
+        ).thenReturn(
+            listOf(NotificationSettingEntity(UUID.randomUUID(), ANNA, NotificationReason.SLOT_BOOKINGS, false))
+        )
+
+        sender.send(userIds = listOf(ANNA), message = message(PushText.SLOT_BOOKED))
+
+        assertNull(keptNotifications().single().heldUntil)
+        verify(delivery, never()).send(anyNonNull(), anyNonNull())
+    }
+
+    @Test
+    fun `chat stays silent in quiet hours`() {
+        givenQuiet(ANNA)
+
+        sender.send(userIds = listOf(ANNA), message = message(PushText.NEW_CHAT_MESSAGE))
+
+        verify(delivery, never()).send(anyNonNull(), anyNonNull())
+    }
+
+    private fun givenQuiet(userId: UUID) {
+        val quiet = mapOf(userId to QuietWindow(startsAt = QUIET_STARTS, endsAt = QUIET_ENDS, zone = MOSCOW))
+        `when`(quietHours.windowsOf(listOf(userId))).thenReturn(quiet)
+        `when`(quietHours.windowsOf(listOf(userId, MAX))).thenReturn(quiet)
     }
 
     private fun keptNotifications(): List<NotificationEntity> {

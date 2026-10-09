@@ -51,6 +51,13 @@ data class UpdateCoachPolicyRequest(
     val diaryRemindersEnabled: Boolean?,
     val checkInRemindersEnabled: Boolean?,
     val workingHours: List<WorkingDayDto>?,
+    val quietHours: QuietHoursDto?,
+)
+
+data class QuietHoursDto(
+    val enabled: Boolean,
+    val startsAt: LocalTime,
+    val endsAt: LocalTime,
 )
 
 data class CoachPolicyResponse(
@@ -60,6 +67,7 @@ data class CoachPolicyResponse(
     val diaryRemindersEnabled: Boolean,
     val checkInRemindersEnabled: Boolean,
     val workingHours: List<WorkingDayDto>,
+    val quietHours: QuietHoursDto?,
 )
 
 data class MissedSessionsResponse(
