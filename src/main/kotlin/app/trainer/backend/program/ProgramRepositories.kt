@@ -25,6 +25,8 @@ interface ProgramSummaryRow {
 
 interface TrainingProgramRepository : JpaRepository<TrainingProgramEntity, UUID> {
 
+    fun countByCoachIdAndArchivedAtIsNull(coachId: UUID): Long
+
     @Query(
         value = """
             select p.id as programId,

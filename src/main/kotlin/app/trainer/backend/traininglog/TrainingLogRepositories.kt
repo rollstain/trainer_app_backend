@@ -23,6 +23,16 @@ interface ExerciseRepository : JpaRepository<ExerciseEntity, UUID> {
 
     @Query(
         value = """
+            select count(*) from exercises e
+            where e.archived_at is null
+              and (e.owner_kind = 'SHARED' or e.owner_id = any (cast(:ownerIds as uuid[])))
+        """,
+        nativeQuery = true,
+    )
+    fun countAvailable(@Param("ownerIds") ownerIds: Array<UUID>): Long
+
+    @Query(
+        value = """
             select e.* from exercises e
             where e.archived_at is null
               and (e.owner_kind = 'SHARED' or e.owner_id = any (cast(:ownerIds as uuid[])))

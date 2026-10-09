@@ -8,6 +8,7 @@ import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
 import app.trainer.backend.push.PushText
 import app.trainer.backend.push.SummaryPart
+import app.trainer.backend.push.namedSummaryArgOf
 import app.trainer.backend.push.summaryArgOf
 import app.trainer.backend.reminder.ReminderLogRepository
 import java.time.Clock
@@ -24,6 +25,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import tools.jackson.databind.ObjectMapper
 
 private val COACH_USER_ID: UUID = UUID.fromString("95000000-0000-0000-0000-000000000001")
 private val COACH_ID: UUID = UUID.fromString("95000000-0000-0000-0000-000000000002")
@@ -37,6 +39,10 @@ private const val LATE_HOUR = 22
 private const val NEW_CLIENTS_AT_NIGHT = 2L
 private const val BOOKINGS_AT_NIGHT = 1L
 private const val CHECK_INS_AT_NIGHT = 2L
+private const val ONE_NEW_CLIENT = 1L
+private const val SECONDS_BEFORE_MORNING = 3600L
+private const val NEW_CLIENT_NAME = "Анна Ковалёва"
+private val NIGHT_EVENT_ID: UUID = UUID.fromString("95000000-0000-0000-0000-000000000003")
 private val NIGHT_ENDED: Instant = Instant.parse("2026-10-09T05:00:00Z")
 private val TEN_PAST_EIGHT_IN_THE_MORNING: Instant = Instant.parse("2026-10-09T05:10:00Z")
 private val TEN_PAST_TEN_IN_THE_EVENING: Instant = Instant.parse("2026-10-08T19:10:00Z")
@@ -68,6 +74,7 @@ class CoachDigestServiceTest {
         reminderLogRepository = reminderLogRepository,
         quietHours = quietHours,
         pushSender = pushSender,
+        objectMapper = ObjectMapper(),
         clock = Clock.fixed(now, ZoneOffset.UTC),
     )
 
@@ -139,6 +146,26 @@ class CoachDigestServiceTest {
             ),
             message.value.args,
         )
+    }
+
+    @Test
+    fun `a night of one event names it in the summary`() {
+        givenCoach()
+        givenQuietNights()
+        givenHeld(PushText.NEW_CLIENT to ONE_NEW_CLIENT)
+        `when`(
+            notificationRepository.findFirstByUserIdAndKindAndHeldUntil(
+                COACH_USER_ID,
+                PushText.NEW_CLIENT,
+                NIGHT_ENDED,
+            )
+        ).thenReturn(heldNewClient())
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+
+        serviceAt(TEN_PAST_EIGHT_IN_THE_MORNING).sendDailyDigests()
+
+        verify(pushSender).send(anyNonNull(), capturedBy(message))
+        assertEquals(listOf(namedSummaryArgOf(SummaryPart.NEW_CLIENTS, NEW_CLIENT_NAME)), message.value.args)
     }
 
     @Test
@@ -217,6 +244,19 @@ class CoachDigestServiceTest {
             }
         )
     }
+
+    private fun heldNewClient(): NotificationEntity = NotificationEntity(
+        id = NIGHT_EVENT_ID,
+        userId = COACH_USER_ID,
+        kind = PushText.NEW_CLIENT,
+        args = "[\"$NEW_CLIENT_NAME\"]",
+        data = "{}",
+        createdAt = NIGHT_ENDED.minusSeconds(SECONDS_BEFORE_MORNING),
+        readAt = null,
+        heldUntil = NIGHT_ENDED,
+        quietFrom = null,
+        quietUntil = null,
+    )
 
     private fun givenCoach(reminderHour: Int = DIGEST_HOUR) {
         `when`(coachRepository.findAll()).thenReturn(listOf(coach(reminderHour)))

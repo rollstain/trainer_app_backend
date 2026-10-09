@@ -44,6 +44,12 @@ class NotificationEntity(
 
     @Column(name = "held_until")
     val heldUntil: Instant?,
+
+    @Column(name = "quiet_from")
+    val quietFrom: Instant?,
+
+    @Column(name = "quiet_until")
+    val quietUntil: Instant?,
 )
 
 @Entity
@@ -90,6 +96,8 @@ interface NotificationRepository : JpaRepository<NotificationEntity, UUID> {
     fun countByUserIdAndReadAtIsNull(userId: UUID): Long
 
     fun countByUserIdAndKindAndCreatedAtAfter(userId: UUID, kind: PushText, createdAt: Instant): Long
+
+    fun findFirstByUserIdAndKindAndHeldUntil(userId: UUID, kind: PushText, heldUntil: Instant): NotificationEntity?
 
     @Modifying
     @Query("update NotificationEntity n set n.readAt = :readAt where n.userId = :userId and n.readAt is null")

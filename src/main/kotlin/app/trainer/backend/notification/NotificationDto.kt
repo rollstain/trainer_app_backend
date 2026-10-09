@@ -15,6 +15,8 @@ data class NotificationResponse(
     val createdAt: Instant,
     val isRead: Boolean,
     val heldUntil: Instant?,
+    val quietFrom: Instant?,
+    val quietUntil: Instant?,
 )
 
 data class UnreadNotificationsResponse(

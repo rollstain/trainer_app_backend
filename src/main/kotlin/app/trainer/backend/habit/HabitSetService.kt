@@ -4,6 +4,7 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
@@ -20,12 +21,16 @@ class HabitSetService(
     private val habitRepository: HabitRepository,
     private val coachRepository: CoachRepository,
     private val coachClientRepository: CoachClientRepository,
+    private val userRepository: UserRepository,
     private val clock: Clock,
 ) {
 
     @Transactional(readOnly = true)
     fun setsOfCoach(coachUserId: UUID): List<HabitSetResponse> =
         responsesOf(setRepository.findByCoachIdOrderByCreatedAtAsc(requireCoach(coachUserId).id))
+
+    @Transactional(readOnly = true)
+    fun setsCount(coachUserId: UUID): Long = setRepository.countByCoachId(requireCoach(coachUserId).id)
 
     @Transactional
     fun create(coachUserId: UUID, request: HabitSetRequest): HabitSetResponse {
@@ -37,6 +42,7 @@ class HabitSetService(
                 coachId = coach.id,
                 title = request.title.trim(),
                 createdAt = Instant.now(clock),
+                updatedAt = null,
             )
         )
         saveItems(setId = set.id, habits = habits)
@@ -48,6 +54,7 @@ class HabitSetService(
         val set = requireOwnSet(coach = requireCoach(coachUserId), setId = setId)
         val habits = habitTitlesOf(request.habits)
         set.title = request.title.trim()
+        set.updatedAt = Instant.now(clock)
         itemRepository.deleteBySetId(set.id)
         saveItems(setId = set.id, habits = habits)
         return responsesOf(listOf(set)).single()
@@ -139,13 +146,21 @@ class HabitSetService(
         val habitsBySet = itemRepository
             .findBySetIdInOrderByPositionAsc(setIds)
             .groupBy(keySelector = { it.setId }, valueTransform = { it.title })
-        val clientsBySet = habitRepository.clientCountsOfSets(setIds).associate { it.setId to it.clients.toInt() }
+        val clientsBySet = habitRepository
+            .clientsOfSets(setIds)
+            .groupBy(keySelector = { it.setId }, valueTransform = { it.clientUserId })
+        val clientIds = clientsBySet.values.flatten().distinct()
+        val namesById = userRepository.findAllById(clientIds).associate { it.id to it.displayName }
         return sets.map { set ->
+            val clients = clientsBySet[set.id].orEmpty()
             HabitSetResponse(
                 id = set.id,
                 title = set.title,
                 habits = habitsBySet[set.id].orEmpty(),
-                assignedClientsCount = clientsBySet[set.id] ?: 0,
+                assignedClientsCount = clients.size,
+                assignedClientNames = clients.mapNotNull { namesById[it] }.sorted(),
+                createdAt = set.createdAt,
+                updatedAt = set.updatedAt,
             )
         }
     }

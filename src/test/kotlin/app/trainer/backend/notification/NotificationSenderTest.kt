@@ -29,6 +29,7 @@ private val ANNA: UUID = UUID.fromString("93000000-0000-0000-0000-000000000001")
 private val MAX: UUID = UUID.fromString("93000000-0000-0000-0000-000000000002")
 private val NOW: Instant = Instant.parse("2026-09-19T09:00:00Z")
 private val MORNING: Instant = Instant.parse("2026-09-19T10:00:00Z")
+private val QUIET_STARTED: Instant = Instant.parse("2026-09-19T07:00:00Z")
 private val QUIET_STARTS: LocalTime = LocalTime.of(10, 0)
 private val QUIET_ENDS: LocalTime = LocalTime.of(13, 0)
 private val MOSCOW: ZoneId = ZoneId.of("Europe/Moscow")
@@ -149,8 +150,12 @@ class NotificationSenderTest {
         sender.send(userIds = listOf(ANNA, MAX), message = booked)
 
         val kept = keptNotifications()
-        assertEquals(MORNING, kept.single { it.userId == ANNA }.heldUntil)
+        val anna = kept.single { it.userId == ANNA }
+        assertEquals(MORNING, anna.heldUntil)
+        assertEquals(QUIET_STARTED, anna.quietFrom)
+        assertEquals(MORNING, anna.quietUntil)
         assertNull(kept.single { it.userId == MAX }.heldUntil)
+        assertNull(kept.single { it.userId == MAX }.quietUntil)
         verify(delivery).send(listOf(MAX), booked)
     }
 
@@ -161,7 +166,9 @@ class NotificationSenderTest {
 
         sender.send(userIds = listOf(ANNA), message = request)
 
-        assertNull(keptNotifications().single().heldUntil)
+        val kept = keptNotifications().single()
+        assertNull(kept.heldUntil)
+        assertEquals(MORNING, kept.quietUntil)
         verify(delivery).send(listOf(ANNA), request)
     }
 

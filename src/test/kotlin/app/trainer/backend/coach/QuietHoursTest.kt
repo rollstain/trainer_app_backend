@@ -63,31 +63,34 @@ class QuietHoursTest {
     private val night = QuietWindow(startsAt = NIGHT_STARTS, endsAt = NIGHT_ENDS, zone = MOSCOW)
 
     @Test
-    fun `late in the evening the night ends tomorrow morning`() {
-        val endsAt = night.endAfter(Instant.parse("2026-10-09T20:30:00Z"))
+    fun `late in the evening the night started tonight and ends tomorrow morning`() {
+        val span = night.spanAt(Instant.parse("2026-10-09T20:30:00Z"))
 
-        assertEquals(Instant.parse("2026-10-10T05:00:00Z"), endsAt)
+        assertEquals(QuietSpan(Instant.parse("2026-10-09T19:00:00Z"), Instant.parse("2026-10-10T05:00:00Z")), span)
     }
 
     @Test
-    fun `before dawn the night ends the same morning`() {
-        val endsAt = night.endAfter(Instant.parse("2026-10-09T03:00:00Z"))
+    fun `before dawn the night started yesterday and ends the same morning`() {
+        val span = night.spanAt(Instant.parse("2026-10-09T03:00:00Z"))
 
-        assertEquals(Instant.parse("2026-10-09T05:00:00Z"), endsAt)
+        assertEquals(QuietSpan(Instant.parse("2026-10-08T19:00:00Z"), Instant.parse("2026-10-09T05:00:00Z")), span)
     }
 
     @Test
     fun `at the end of quiet hours and in the day nothing is quiet`() {
-        assertNull(night.endAfter(Instant.parse("2026-10-09T05:00:00Z")))
-        assertNull(night.endAfter(Instant.parse("2026-10-09T12:00:00Z")))
+        assertNull(night.spanAt(Instant.parse("2026-10-09T05:00:00Z")))
+        assertNull(night.spanAt(Instant.parse("2026-10-09T12:00:00Z")))
     }
 
     @Test
     fun `quiet hours inside one day end the same day`() {
         val lunch = QuietWindow(startsAt = LUNCH_STARTS, endsAt = LUNCH_ENDS, zone = MOSCOW)
 
-        assertEquals(Instant.parse("2026-10-09T12:00:00Z"), lunch.endAfter(Instant.parse("2026-10-09T11:00:00Z")))
-        assertNull(lunch.endAfter(Instant.parse("2026-10-09T19:00:00Z")))
+        assertEquals(
+            QuietSpan(Instant.parse("2026-10-09T10:00:00Z"), Instant.parse("2026-10-09T12:00:00Z")),
+            lunch.spanAt(Instant.parse("2026-10-09T11:00:00Z")),
+        )
+        assertNull(lunch.spanAt(Instant.parse("2026-10-09T19:00:00Z")))
     }
 
     @Test

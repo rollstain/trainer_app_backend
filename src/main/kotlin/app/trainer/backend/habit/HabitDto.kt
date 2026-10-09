@@ -2,6 +2,7 @@ package app.trainer.backend.habit
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import java.time.Instant
 import java.time.LocalDate
 import java.util.UUID
 
@@ -40,4 +41,7 @@ data class HabitSetResponse(
     val title: String,
     val habits: List<String>,
     val assignedClientsCount: Int,
+    val assignedClientNames: List<String>,
+    val createdAt: Instant,
+    val updatedAt: Instant?,
 )

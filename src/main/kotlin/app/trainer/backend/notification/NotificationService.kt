@@ -23,7 +23,7 @@ import tools.jackson.databind.ObjectMapper
 
 private const val NOTIFICATIONS_PER_PAGE = 30
 
-private val ARGS_TYPE = object : TypeReference<List<String>>() {}
+internal val NOTIFICATION_ARGS_TYPE = object : TypeReference<List<String>>() {}
 private val DATA_TYPE = object : TypeReference<Map<String, String>>() {}
 
 @Service
@@ -117,7 +117,7 @@ class NotificationService(
     private fun toResponse(notification: NotificationEntity, locale: Locale): NotificationResponse {
         val rendered = pushTexts.render(
             text = notification.kind,
-            args = objectMapper.readValue(notification.args, ARGS_TYPE),
+            args = objectMapper.readValue(notification.args, NOTIFICATION_ARGS_TYPE),
             locale = locale,
         )
         return NotificationResponse(
@@ -129,6 +129,8 @@ class NotificationService(
             createdAt = notification.createdAt,
             isRead = notification.readAt != null,
             heldUntil = notification.heldUntil,
+            quietFrom = notification.quietFrom,
+            quietUntil = notification.quietUntil,
         )
     }
 }

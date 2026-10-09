@@ -40,6 +40,10 @@ class TrainingLogService(
 ) {
 
     @Transactional(readOnly = true)
+    fun availableExercisesCount(userId: UUID): Long =
+        exerciseRepository.countAvailable(ownerIdsVisibleTo(userId).toTypedArray())
+
+    @Transactional(readOnly = true)
     fun availableExercises(
         userId: UUID,
         limit: Int?,

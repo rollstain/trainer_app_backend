@@ -184,5 +184,7 @@ class NotificationServiceTest {
         createdAt = createdAt,
         readAt = readAt,
         heldUntil = null,
+        quietFrom = null,
+        quietUntil = null,
     )
 }

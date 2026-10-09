@@ -10,6 +10,7 @@ import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
 import app.trainer.backend.push.PushText
 import app.trainer.backend.push.SummaryPart
+import app.trainer.backend.push.namedSummaryArgOf
 import app.trainer.backend.push.summaryArgOf
 import app.trainer.backend.reminder.ReminderLogEntity
 import app.trainer.backend.reminder.ReminderLogRepository
@@ -22,11 +23,13 @@ import java.time.temporal.ChronoUnit
 import java.util.UUID
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import tools.jackson.databind.ObjectMapper
 
 private const val DIGEST_WINDOW_HOURS = 24L
 private const val HELD_LOOKBACK_HOURS = 24L
 private const val DIGEST_REMINDER_KIND = "COACH_DIGEST"
 private const val NIGHT_REMINDER_KIND = "COACH_NIGHT"
+private const val ONE_EVENT = 1L
 
 private val DIGESTED: Map<PushText, PushText> = mapOf(
     PushText.NEW_CHECK_IN to PushText.CHECK_INS_WAITING,
@@ -49,6 +52,7 @@ class CoachDigestService(
     private val reminderLogRepository: ReminderLogRepository,
     private val quietHours: CoachQuietHoursLookup,
     private val pushSender: PushSender,
+    private val objectMapper: ObjectMapper,
     private val clock: Clock,
 ) {
 
@@ -82,7 +86,7 @@ class CoachDigestService(
     private fun isDigestHour(coach: CoachEntity, window: QuietWindow?, zone: ZoneId, now: Instant): Boolean {
         val hour = now.atZone(zone).hour
         if (window == null) return hour == coach.reminderHour
-        if (window.endAfter(now) != null) return false
+        if (window.spanAt(now) != null) return false
         val digestMovedToMorning = window.covers(LocalTime.of(coach.reminderHour, 0))
         return hour == if (digestMovedToMorning) window.endsAt.hour else coach.reminderHour
     }
@@ -157,10 +161,33 @@ class CoachDigestService(
             message = PushMessage(
                 channel = PushChannel.CHAT,
                 text = PushText.MORNING_SUMMARY,
-                args = SummaryPart.entries.filter { it in counts }.map { summaryArgOf(it, counts.getValue(it)) },
+                args = summaryArgsOf(coach = coach, counts = counts, nights = nights),
                 data = emptyMap(),
             ),
         )
+    }
+
+    private fun summaryArgsOf(
+        coach: CoachEntity,
+        counts: Map<SummaryPart, Long>,
+        nights: Map<Instant, Map<PushText, Long>>,
+    ): List<String> {
+        val parts = SummaryPart.entries.filter { it in counts }
+        val onlyPart = parts.singleOrNull()
+        val namesItsEvent = onlyPart != null && onlyPart != SummaryPart.OTHER && counts[onlyPart] == ONE_EVENT
+        val name = if (namesItsEvent) nameOfOnlyNightEvent(coach = coach, nights = nights) else null
+        if (onlyPart != null && name != null) return listOf(namedSummaryArgOf(onlyPart, name))
+        return parts.map { summaryArgOf(it, counts.getValue(it)) }
+    }
+
+    private fun nameOfOnlyNightEvent(coach: CoachEntity, nights: Map<Instant, Map<PushText, Long>>): String? {
+        val (heldUntil, kinds) = nights.entries.single()
+        val event = notificationRepository.findFirstByUserIdAndKindAndHeldUntil(
+            userId = coach.userId,
+            kind = kinds.keys.single(),
+            heldUntil = heldUntil,
+        ) ?: return null
+        return objectMapper.readValue(event.args, NOTIFICATION_ARGS_TYPE).firstOrNull()
     }
 
     private fun partOf(kind: PushText): SummaryPart = SUMMARY_PARTS[kind] ?: SummaryPart.OTHER
