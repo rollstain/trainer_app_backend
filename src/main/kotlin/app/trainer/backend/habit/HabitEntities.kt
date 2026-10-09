@@ -33,6 +33,9 @@ class HabitEntity(
 
     @Column(name = "archived_at")
     var archivedAt: Instant?,
+
+    @Column(name = "habit_set_id")
+    val habitSetId: UUID?,
 )
 
 @Entity
@@ -56,6 +59,17 @@ interface HabitRepository : JpaRepository<HabitEntity, UUID> {
 
     @Query("select distinct h.title from HabitEntity h where h.coachId = :coachId order by h.title")
     fun titlesOfCoach(@Param("coachId") coachId: UUID): List<String>
+
+    @Query(
+        "select h.habitSetId as setId, count(distinct h.clientUserId) as clients from HabitEntity h " +
+            "where h.habitSetId in :setIds group by h.habitSetId"
+    )
+    fun clientCountsOfSets(@Param("setIds") setIds: Collection<UUID>): List<HabitSetClients>
+}
+
+interface HabitSetClients {
+    val setId: UUID
+    val clients: Long
 }
 
 interface HabitMarkRepository : JpaRepository<HabitMarkEntity, UUID> {

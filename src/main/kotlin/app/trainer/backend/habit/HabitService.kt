@@ -86,6 +86,7 @@ class HabitService(
                 title = request.title.trim(),
                 createdAt = Instant.now(clock),
                 archivedAt = null,
+                habitSetId = null,
             )
         )
     }
