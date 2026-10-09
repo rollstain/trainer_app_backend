@@ -186,5 +186,6 @@ class NotificationServiceTest {
         heldUntil = null,
         quietFrom = null,
         quietUntil = null,
+        pushedAt = null,
     )
 }

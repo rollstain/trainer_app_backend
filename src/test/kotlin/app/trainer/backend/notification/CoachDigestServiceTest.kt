@@ -256,6 +256,7 @@ class CoachDigestServiceTest {
         heldUntil = NIGHT_ENDED,
         quietFrom = null,
         quietUntil = null,
+        pushedAt = null,
     )
 
     private fun givenCoach(reminderHour: Int = DIGEST_HOUR) {

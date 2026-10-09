@@ -14,6 +14,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
@@ -154,6 +155,7 @@ class NotificationSenderTest {
         assertEquals(MORNING, anna.heldUntil)
         assertEquals(QUIET_STARTED, anna.quietFrom)
         assertEquals(MORNING, anna.quietUntil)
+        assertNull(anna.pushedAt)
         assertNull(kept.single { it.userId == MAX }.heldUntil)
         assertNull(kept.single { it.userId == MAX }.quietUntil)
         verify(delivery).send(listOf(MAX), booked)
@@ -169,6 +171,7 @@ class NotificationSenderTest {
         val kept = keptNotifications().single()
         assertNull(kept.heldUntil)
         assertEquals(MORNING, kept.quietUntil)
+        assertNotNull(kept.pushedAt)
         verify(delivery).send(listOf(ANNA), request)
     }
 
