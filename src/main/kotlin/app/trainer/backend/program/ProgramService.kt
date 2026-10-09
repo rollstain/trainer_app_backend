@@ -50,6 +50,10 @@ class ProgramService(
 ) {
 
     @Transactional(readOnly = true)
+    fun programsCount(coachUserId: UUID): Long =
+        programRepository.countByCoachIdAndArchivedAtIsNull(requireCoach(coachUserId).id)
+
+    @Transactional(readOnly = true)
     fun programsOf(coachUserId: UUID, limit: Int?, after: String?): Page<ProgramSummaryResponse> {
         val coach = requireCoach(coachUserId)
         val pageSize = pageSizeOf(limit) ?: PROGRAMS_PER_PAGE

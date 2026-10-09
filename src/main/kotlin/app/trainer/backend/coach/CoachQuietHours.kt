@@ -34,18 +34,25 @@ interface CoachQuietHoursRepository : JpaRepository<CoachQuietHoursEntity, UUID>
     fun findByCoachIdInAndEnabledTrue(coachIds: Collection<UUID>): List<CoachQuietHoursEntity>
 }
 
+data class QuietSpan(val from: Instant, val until: Instant)
+
 data class QuietWindow(val startsAt: LocalTime, val endsAt: LocalTime, val zone: ZoneId) {
 
     fun covers(time: LocalTime): Boolean =
         if (startsAt < endsAt) time >= startsAt && time < endsAt else time >= startsAt || time < endsAt
 
-    fun endAfter(now: Instant): Instant? {
+    fun spanAt(now: Instant): QuietSpan? {
         val local = now.atZone(zone)
         val time = local.toLocalTime()
         if (!covers(time)) return null
         val today = local.toLocalDate()
-        val endsOn = if (startsAt > endsAt && time >= startsAt) today.plusDays(1) else today
-        return endsOn.atTime(endsAt).atZone(zone).toInstant()
+        val crossesMidnight = startsAt > endsAt
+        val startsOn = if (crossesMidnight && time < endsAt) today.minusDays(1) else today
+        val endsOn = if (crossesMidnight && time >= startsAt) today.plusDays(1) else today
+        return QuietSpan(
+            from = startsOn.atTime(startsAt).atZone(zone).toInstant(),
+            until = endsOn.atTime(endsAt).atZone(zone).toInstant(),
+        )
     }
 }
 

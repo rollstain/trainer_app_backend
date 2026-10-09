@@ -9,6 +9,8 @@ val DEFAULT_PUSH_LOCALE: Locale = Locale.forLanguageTag("ru")
 private const val ENGLISH_LANGUAGE = "en"
 private const val SUMMARY_PART_SEPARATOR = "="
 private const val SUMMARY_PARTS_JOINER = ", "
+private const val SUMMARY_ARG_MAX_FIELDS = 3
+private const val SUMMARY_NAME_FIELD = 2
 private const val LAST_DIGIT_DIVISOR = 10L
 private const val LAST_TWO_DIGITS_DIVISOR = 100L
 private const val SINGLE = 1L
@@ -26,6 +28,9 @@ enum class SummaryPart(val messageKey: String) {
 }
 
 fun summaryArgOf(part: SummaryPart, count: Long): String = "${part.name}$SUMMARY_PART_SEPARATOR$count"
+
+fun namedSummaryArgOf(part: SummaryPart, name: String): String =
+    "${summaryArgOf(part, SINGLE)}$SUMMARY_PART_SEPARATOR$name"
 
 data class RenderedPush(val title: String, val body: String)
 
@@ -47,8 +52,14 @@ class PushTexts(private val messageSource: MessageSource) {
     private fun summaryOf(args: List<String>, locale: Locale): String {
         val parts = mutableListOf<String>()
         for (arg in args) {
-            val (partName, countText) = arg.split(SUMMARY_PART_SEPARATOR)
+            val fields = arg.split(SUMMARY_PART_SEPARATOR, limit = SUMMARY_ARG_MAX_FIELDS)
+            val (partName, countText) = fields
             val part = SummaryPart.valueOf(partName)
+            val name = fields.getOrNull(SUMMARY_NAME_FIELD)
+            if (name != null) {
+                parts.add(messageSource.getMessage("push.summary.${part.messageKey}.named", arrayOf(name), locale))
+                continue
+            }
             val form = pluralFormOf(count = countText.toLong(), locale = locale)
             parts.add(messageSource.getMessage("push.summary.${part.messageKey}.$form", arrayOf(countText), locale))
         }

@@ -17,6 +17,7 @@ private const val ELEVEN = 11L
 private const val TWENTY_ONE = 21L
 private const val TWENTY_TWO = 22L
 private val SUMMARY_ARGS = listOf(summaryArgOf(SummaryPart.CHECK_INS, TWO))
+private const val CLIENT_NAME = "Анна Ковалёва"
 
 class PushTextsTest {
 
@@ -79,6 +80,30 @@ class PushTextsTest {
         assertEquals("Утренняя сводка", russian.title)
         assertEquals("За ночь: 2 чек-ина, 1 разбор техники, 5 записей на слоты", russian.body)
         assertEquals("Overnight: 2 check-ins, 1 form review, 5 slot bookings", english.body)
+    }
+
+    @Test
+    fun `a night of one event names who it came from`() {
+        val night = listOf(namedSummaryArgOf(SummaryPart.NEW_CLIENTS, CLIENT_NAME))
+
+        val russian = pushTexts.render(PushText.MORNING_SUMMARY, night, DEFAULT_PUSH_LOCALE)
+        val english = pushTexts.render(PushText.MORNING_SUMMARY, night, ENGLISH)
+
+        assertEquals("За ночь: новый подопечный — Анна Ковалёва", russian.body)
+        assertEquals("Overnight: a new client, Анна Ковалёва", english.body)
+    }
+
+    @Test
+    fun `every named part has a text in both languages`() {
+        for (part in SummaryPart.entries.filter { it != SummaryPart.OTHER }) {
+            val night = listOf(namedSummaryArgOf(part, CLIENT_NAME))
+
+            val russian = pushTexts.render(PushText.MORNING_SUMMARY, night, DEFAULT_PUSH_LOCALE)
+            val english = pushTexts.render(PushText.MORNING_SUMMARY, night, ENGLISH)
+
+            assertTrue(russian.body.contains(CLIENT_NAME), "нет русского текста для $part")
+            assertTrue(english.body.contains(CLIENT_NAME), "нет английского текста для $part")
+        }
     }
 
     @Test

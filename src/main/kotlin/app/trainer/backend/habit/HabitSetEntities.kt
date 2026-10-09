@@ -24,6 +24,9 @@ class HabitSetEntity(
 
     @Column(name = "created_at")
     val createdAt: Instant,
+
+    @Column(name = "updated_at")
+    var updatedAt: Instant?,
 )
 
 @Entity
@@ -47,6 +50,8 @@ class HabitSetItemEntity(
 interface HabitSetRepository : JpaRepository<HabitSetEntity, UUID> {
 
     fun findByCoachIdOrderByCreatedAtAsc(coachId: UUID): List<HabitSetEntity>
+
+    fun countByCoachId(coachId: UUID): Long
 }
 
 interface HabitSetItemRepository : JpaRepository<HabitSetItemEntity, UUID> {

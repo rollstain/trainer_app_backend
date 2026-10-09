@@ -61,15 +61,15 @@ interface HabitRepository : JpaRepository<HabitEntity, UUID> {
     fun titlesOfCoach(@Param("coachId") coachId: UUID): List<String>
 
     @Query(
-        "select h.habitSetId as setId, count(distinct h.clientUserId) as clients from HabitEntity h " +
-            "where h.habitSetId in :setIds group by h.habitSetId"
+        "select distinct h.habitSetId as setId, h.clientUserId as clientUserId from HabitEntity h " +
+            "where h.habitSetId in :setIds"
     )
-    fun clientCountsOfSets(@Param("setIds") setIds: Collection<UUID>): List<HabitSetClients>
+    fun clientsOfSets(@Param("setIds") setIds: Collection<UUID>): List<HabitSetClient>
 }
 
-interface HabitSetClients {
+interface HabitSetClient {
     val setId: UUID
-    val clients: Long
+    val clientUserId: UUID
 }
 
 interface HabitMarkRepository : JpaRepository<HabitMarkEntity, UUID> {

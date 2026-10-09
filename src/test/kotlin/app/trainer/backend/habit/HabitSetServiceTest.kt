@@ -5,6 +5,8 @@ import app.trainer.backend.coach.CoachClientRepository
 import app.trainer.backend.coach.CoachClientStatus
 import app.trainer.backend.coach.CoachEntity
 import app.trainer.backend.coach.CoachRepository
+import app.trainer.backend.user.UserEntity
+import app.trainer.backend.user.UserRepository
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -28,12 +30,14 @@ private val COACH_ID: UUID = UUID.fromString("a0000000-0000-0000-0000-0000000000
 private val OTHER_COACH_ID: UUID = UUID.fromString("a0000000-0000-0000-0000-000000000003")
 private val CLIENT_USER_ID: UUID = UUID.fromString("a0000000-0000-0000-0000-000000000004")
 private val SET_ID: UUID = UUID.fromString("a0000000-0000-0000-0000-000000000005")
+private val SECOND_CLIENT_USER_ID: UUID = UUID.fromString("a0000000-0000-0000-0000-000000000006")
 private val NOW: Instant = Instant.parse("2026-10-09T09:00:00Z")
 private const val CANCELLATION_WINDOW_HOURS = 12
 private const val REMINDER_HOUR = 10
-private const val CLIENTS_WITH_SET = 3L
 private const val HABITS_ADDED_FROM_SET = 2
 private const val SET_TITLE = "Утро"
+private const val ELENA = "Елена Литвинова"
+private const val ANNA = "Анна Ковалёва"
 private const val WATER = "Вода 2 л"
 private const val SLEEP = "Сон 8 часов"
 private const val STEPS = "10 000 шагов"
@@ -51,6 +55,7 @@ class HabitSetServiceTest {
     private val habitRepository = mock(HabitRepository::class.java)
     private val coachRepository = mock(CoachRepository::class.java)
     private val coachClientRepository = mock(CoachClientRepository::class.java)
+    private val userRepository = mock(UserRepository::class.java)
 
     private val service = HabitSetService(
         setRepository = setRepository,
@@ -58,6 +63,7 @@ class HabitSetServiceTest {
         habitRepository = habitRepository,
         coachRepository = coachRepository,
         coachClientRepository = coachClientRepository,
+        userRepository = userRepository,
         clock = Clock.fixed(NOW, ZoneOffset.UTC),
     )
 
@@ -117,6 +123,7 @@ class HabitSetServiceTest {
         verify(itemRepository).deleteBySetId(SET_ID)
         verify(habitRepository, never()).save(anyNonNull<HabitEntity>())
         assertEquals(listOf(SLEEP), edited.habits)
+        assertEquals(NOW, edited.updatedAt)
     }
 
     @Test
@@ -137,22 +144,22 @@ class HabitSetServiceTest {
     }
 
     @Test
-    fun `the list tells how many clients got each set`() {
+    fun `the list tells who got each set`() {
         givenCoach()
         `when`(setRepository.findByCoachIdOrderByCreatedAtAsc(COACH_ID)).thenReturn(listOf(set(coachId = COACH_ID)))
         givenItems(WATER)
-        `when`(habitRepository.clientCountsOfSets(listOf(SET_ID))).thenReturn(
-            listOf(
-                object : HabitSetClients {
-                    override val setId: UUID = SET_ID
-                    override val clients: Long = CLIENTS_WITH_SET
-                }
-            )
+        `when`(habitRepository.clientsOfSets(listOf(SET_ID))).thenReturn(
+            listOf(setClient(CLIENT_USER_ID), setClient(SECOND_CLIENT_USER_ID))
+        )
+        `when`(userRepository.findAllById(listOf(CLIENT_USER_ID, SECOND_CLIENT_USER_ID))).thenReturn(
+            listOf(user(CLIENT_USER_ID, ELENA), user(SECOND_CLIENT_USER_ID, ANNA))
         )
 
-        val sets = service.setsOfCoach(coachUserId = COACH_USER_ID)
+        val listed = service.setsOfCoach(coachUserId = COACH_USER_ID).single()
 
-        assertEquals(CLIENTS_WITH_SET.toInt(), sets.single().assignedClientsCount)
+        assertEquals(2, listed.assignedClientsCount)
+        assertEquals(listOf(ANNA, ELENA), listed.assignedClientNames)
+        assertEquals(NOW, listed.createdAt)
     }
 
     @Test
@@ -263,7 +270,22 @@ class HabitSetServiceTest {
     }
 
     private fun set(coachId: UUID): HabitSetEntity =
-        HabitSetEntity(id = SET_ID, coachId = coachId, title = SET_TITLE, createdAt = NOW)
+        HabitSetEntity(id = SET_ID, coachId = coachId, title = SET_TITLE, createdAt = NOW, updatedAt = null)
+
+    private fun setClient(clientId: UUID): HabitSetClient = object : HabitSetClient {
+        override val setId: UUID = SET_ID
+        override val clientUserId: UUID = clientId
+    }
+
+    private fun user(id: UUID, name: String): UserEntity = UserEntity(
+        id = id,
+        displayName = name,
+        phone = null,
+        email = null,
+        login = null,
+        isOwner = false,
+        createdAt = NOW,
+    )
 
     private fun habit(title: String): HabitEntity = HabitEntity(
         id = UUID.randomUUID(),

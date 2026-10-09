@@ -1,6 +1,7 @@
 package app.trainer.backend.notification
 
 import app.trainer.backend.coach.CoachQuietHoursLookup
+import app.trainer.backend.coach.QuietSpan
 import app.trainer.backend.push.NotificationReason
 import app.trainer.backend.push.PushDelivery
 import app.trainer.backend.push.PushMessage
@@ -25,17 +26,17 @@ class NotificationSender(
         val recipients = userIds.distinct()
         if (recipients.isEmpty()) return
         val now = Instant.now(clock)
+        val quiet = quietSpansOf(recipients = recipients, now = now)
         if (message.text.collapsesIntoDigest) {
-            keep(recipients = recipients, message = message, now = now, heldUntil = emptyMap())
+            keep(recipients = recipients, message = message, now = now, quiet = quiet, held = emptySet())
             return
         }
         val muted = mutedOf(recipients = recipients, message = message)
-        val quietUntil = quietUntilOf(recipients = recipients, message = message, now = now)
+        val silenced = if (message.text.reason == NotificationReason.CHANGE_REQUESTS) emptySet() else quiet.keys
         if (message.text.keptInHistory) {
-            val heldUntil = quietUntil.filterKeys { it !in muted }
-            keep(recipients = recipients, message = message, now = now, heldUntil = heldUntil)
+            keep(recipients = recipients, message = message, now = now, quiet = quiet, held = silenced - muted)
         }
-        val pushed = recipients.filterNot { it in muted || it in quietUntil }
+        val pushed = recipients.filterNot { it in muted || it in silenced }
         if (pushed.isNotEmpty()) delivery.send(userIds = pushed, message = message)
     }
 
@@ -47,17 +48,22 @@ class NotificationSender(
             .toSet()
     }
 
-    private fun quietUntilOf(recipients: List<UUID>, message: PushMessage, now: Instant): Map<UUID, Instant> {
-        if (message.text.reason == NotificationReason.CHANGE_REQUESTS) return emptyMap()
-        val quietUntil = mutableMapOf<UUID, Instant>()
+    private fun quietSpansOf(recipients: List<UUID>, now: Instant): Map<UUID, QuietSpan> {
+        val spans = mutableMapOf<UUID, QuietSpan>()
         for ((userId, window) in quietHours.windowsOf(recipients)) {
-            val endsAt = window.endAfter(now) ?: continue
-            quietUntil[userId] = endsAt
+            val span = window.spanAt(now) ?: continue
+            spans[userId] = span
         }
-        return quietUntil
+        return spans
     }
 
-    private fun keep(recipients: List<UUID>, message: PushMessage, now: Instant, heldUntil: Map<UUID, Instant>) {
+    private fun keep(
+        recipients: List<UUID>,
+        message: PushMessage,
+        now: Instant,
+        quiet: Map<UUID, QuietSpan>,
+        held: Set<UUID>,
+    ) {
         val args = objectMapper.writeValueAsString(message.args)
         val data = objectMapper.writeValueAsString(message.data)
         notificationRepository.saveAll(
@@ -70,7 +76,9 @@ class NotificationSender(
                     data = data,
                     createdAt = now,
                     readAt = null,
-                    heldUntil = heldUntil[userId],
+                    heldUntil = if (userId in held) quiet[userId]?.until else null,
+                    quietFrom = quiet[userId]?.from,
+                    quietUntil = quiet[userId]?.until,
                 )
             }
         )
