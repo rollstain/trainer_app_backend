@@ -11,6 +11,9 @@ import java.util.UUID
 import org.slf4j.LoggerFactory
 
 private const val FCM_BATCH_LIMIT = 500
+private const val PUSH_KIND_KEY = "kind"
+
+fun fcmDataOf(message: PushMessage): Map<String, String> = message.data + (PUSH_KIND_KEY to message.text.name)
 
 class FcmPushDelivery(
     private val messaging: FirebaseMessaging,
@@ -51,7 +54,7 @@ class FcmPushDelivery(
                     )
                     .build()
             )
-            .putAllData(message.data)
+            .putAllData(fcmDataOf(message))
             .addAllTokens(tokens)
             .build()
 
