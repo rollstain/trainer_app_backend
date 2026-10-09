@@ -27,6 +27,12 @@ data class CreateSlotRequest(
     val capacity: Int?,
 )
 
+data class UpdateSlotRequest(
+    @field:Min(MIN_SLOT_CAPACITY)
+    @field:Max(MAX_SLOT_CAPACITY)
+    val capacity: Int,
+)
+
 data class CreateSlotSeriesRequest(
     val startDate: LocalDate,
     @field:Positive

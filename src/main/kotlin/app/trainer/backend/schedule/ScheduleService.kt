@@ -184,6 +184,23 @@ class ScheduleService(
     }
 
     @Transactional
+    fun changeCapacity(coachUserId: UUID, slotId: UUID, capacity: Int): CoachSlotResponse {
+        val coach = coachRepository.requireCoach(coachUserId)
+        val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()
+        requireSlotOwnedBy(slot = slot, coach = coach)
+        if (slot.lifecycle != SlotLifecycle.SCHEDULED || !startsInFuture(slot)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Места меняются только у предстоящего занятия")
+        }
+        if (capacity < seatsTakenIn(slot.id)) {
+            throw ResponseStatusException(HttpStatus.CONFLICT, "Мест не может быть меньше, чем записалось")
+        }
+        val seatsAdded = capacity > slot.capacity
+        slot.capacity = capacity
+        if (seatsAdded) seats.notifyWaitlist(slot)
+        return toCoachResponse(slot = slot, pendingRequestId = pendingRequestIdsFor(listOf(slot))[slot.id])
+    }
+
+    @Transactional
     fun assignSlot(coachUserId: UUID, slotId: UUID, clientUserId: UUID): CoachSlotResponse {
         val coach = coachRepository.requireCoach(coachUserId)
         val slot = slotRepository.findWithLockById(slotId) ?: slotNotFound()

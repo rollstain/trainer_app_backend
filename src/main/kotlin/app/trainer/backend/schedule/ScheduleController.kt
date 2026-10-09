@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -63,6 +64,19 @@ class ScheduleController(
     @GetMapping("/slots/{slotId}")
     fun coachSlot(@CurrentUserId coachUserId: UUID, @PathVariable slotId: UUID): CoachSlotResponse {
         return scheduleService.coachSlot(coachUserId = coachUserId, slotId = slotId)
+    }
+
+    @PatchMapping("/slots/{slotId}")
+    fun changeSlot(
+        @CurrentUserId coachUserId: UUID,
+        @PathVariable slotId: UUID,
+        @Valid @RequestBody request: UpdateSlotRequest,
+    ): CoachSlotResponse {
+        return scheduleService.changeCapacity(
+            coachUserId = coachUserId,
+            slotId = slotId,
+            capacity = request.capacity,
+        )
     }
 
     @PostMapping("/slots/{slotId}/assign")

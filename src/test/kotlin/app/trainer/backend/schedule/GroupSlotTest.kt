@@ -41,6 +41,7 @@ private const val SLOT_STARTS_AT_IN_COACH_ZONE = "03.03 12:00"
 private const val SLOT_DURATION_MINUTES = 60
 private const val SECONDS_IN_HOUR = 3600L
 private const val GROUP_SEATS = 2
+private const val WIDER_GROUP_SEATS = 3
 private const val SINGLE_SEAT = 1
 private const val CANCELLATION_WINDOW_HOURS = 12
 private const val REMINDER_HOUR = 10
@@ -486,6 +487,81 @@ class GroupSlotTest {
         val first = schedule.slots.single()
         assertFalse(first.isOnWaitlist)
         assertEquals(null, first.waitlistPosition)
+    }
+
+    @Test
+    fun `added seats go to the waitlist first`() {
+        val slot = slot(capacity = GROUP_SEATS)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT, SECOND_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(waitlistRepository.findBySlotIdOrderByCreatedAtAsc(SLOT_ID)).thenReturn(listOf(waiting(THIRD_CLIENT)))
+        val recipients = ArgumentCaptor.forClass(Collection::class.java)
+        val message = ArgumentCaptor.forClass(PushMessage::class.java)
+
+        val changed = service.changeCapacity(
+            coachUserId = COACH_USER_ID,
+            slotId = SLOT_ID,
+            capacity = WIDER_GROUP_SEATS,
+        )
+
+        assertEquals(WIDER_GROUP_SEATS, changed.capacity)
+        verify(pushSender).send(capturedBy(recipients), capturedBy(message))
+        assertEquals(listOf(THIRD_CLIENT), recipients.value.toList())
+        assertEquals(PushText.WAITLIST_SLOT_FREED, message.value.text)
+    }
+
+    @Test
+    fun `seats never drop below those who signed up`() {
+        val slot = slot(capacity = WIDER_GROUP_SEATS)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT, SECOND_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.changeCapacity(coachUserId = COACH_USER_ID, slotId = SLOT_ID, capacity = SINGLE_SEAT)
+        }
+
+        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+        assertEquals(WIDER_GROUP_SEATS, slot.capacity)
+    }
+
+    @Test
+    fun `fewer seats down to those who signed up send no push`() {
+        val slot = slot(capacity = WIDER_GROUP_SEATS)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT, SECOND_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+
+        service.changeCapacity(coachUserId = COACH_USER_ID, slotId = SLOT_ID, capacity = GROUP_SEATS)
+
+        assertEquals(GROUP_SEATS, slot.capacity)
+        verify(pushSender, never()).send(anyNonNull(), anyNonNull())
+    }
+
+    @Test
+    fun `a session that has already started keeps its seats`() {
+        val slot = slot(capacity = GROUP_SEATS, startsAt = NOW.minusSeconds(SECONDS_IN_HOUR))
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.changeCapacity(coachUserId = COACH_USER_ID, slotId = SLOT_ID, capacity = WIDER_GROUP_SEATS)
+        }
+
+        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+        assertEquals(GROUP_SEATS, slot.capacity)
+    }
+
+    @Test
+    fun `a cancelled session keeps its seats`() {
+        val slot = slot(capacity = GROUP_SEATS, lifecycle = SlotLifecycle.CANCELLED)
+        givenSlot(slot, takenBy = listOf(FIRST_CLIENT))
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+
+        val failure = assertFailsWith<ResponseStatusException> {
+            service.changeCapacity(coachUserId = COACH_USER_ID, slotId = SLOT_ID, capacity = WIDER_GROUP_SEATS)
+        }
+
+        assertEquals(HttpStatus.CONFLICT, failure.statusCode)
+        assertEquals(GROUP_SEATS, slot.capacity)
     }
 
     private fun givenSlot(slot: TrainingSlotEntity, takenBy: List<UUID>) {
