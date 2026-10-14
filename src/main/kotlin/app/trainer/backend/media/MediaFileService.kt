@@ -127,6 +127,14 @@ class MediaFileService(
     }
 
     @Transactional(readOnly = true)
+    fun countsOf(ownerKind: MediaOwnerKind, ownerIds: Collection<UUID>): Map<UUID, Int> {
+        if (ownerIds.isEmpty()) return emptyMap()
+        return mediaFileRepository
+            .countByOwner(ownerKind = ownerKind, ownerIds = ownerIds)
+            .associate { it.ownerId to it.filesCount.toInt() }
+    }
+
+    @Transactional(readOnly = true)
     fun freshDownloadUrl(mediaFileId: UUID, ownerKind: MediaOwnerKind, scopeId: UUID): String {
         val file = requireFile(mediaFileId)
         requireSameScope(file = file, ownerKind = ownerKind, scopeId = scopeId)
