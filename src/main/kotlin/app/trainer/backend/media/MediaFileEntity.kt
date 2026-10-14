@@ -9,6 +9,8 @@ import jakarta.persistence.Table
 import java.time.Instant
 import java.util.UUID
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 enum class MediaOwnerKind { DIALOG_MESSAGE, CHECK_IN, EXERCISE, FORM_CHECK }
 
@@ -61,5 +63,19 @@ interface MediaFileRepository : JpaRepository<MediaFileEntity, UUID> {
 
     fun findByOwnerKindAndOwnerId(ownerKind: MediaOwnerKind, ownerId: UUID): List<MediaFileEntity>
 
+    @Query(
+        "select f.ownerId as ownerId, count(f) as filesCount from MediaFileEntity f " +
+            "where f.ownerKind = :ownerKind and f.ownerId in :ownerIds group by f.ownerId"
+    )
+    fun countByOwner(
+        @Param("ownerKind") ownerKind: MediaOwnerKind,
+        @Param("ownerIds") ownerIds: Collection<UUID>,
+    ): List<OwnedFilesCount>
+
     fun findByOwnerIdIsNullAndCreatedAtBefore(createdAt: Instant): List<MediaFileEntity>
+}
+
+interface OwnedFilesCount {
+    val ownerId: UUID
+    val filesCount: Long
 }

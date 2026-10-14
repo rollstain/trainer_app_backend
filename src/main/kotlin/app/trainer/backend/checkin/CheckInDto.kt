@@ -49,6 +49,10 @@ data class AwaitingCheckInResponse(
     val clientUserId: UUID,
     val clientDisplayName: String,
     val checkInDate: LocalDate,
+    val weightGrams: Int?,
+    val previousWeightGrams: Int?,
+    val photosCount: Int,
+    val notes: String?,
 )
 
 data class ReviewCheckInRequest(

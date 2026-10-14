@@ -102,6 +102,24 @@ interface CheckInRepository : JpaRepository<CheckInEntity, UUID> {
     )
     fun countAwaiting(@Param("coachId") coachId: UUID): Long
 
+    @Query(
+        value = """
+            select later.id as checkInId, earlier.weight_grams as weightGrams
+            from check_ins later
+            join lateral (
+                select p.weight_grams from check_ins p
+                where p.client_user_id = later.client_user_id
+                  and p.check_in_date < later.check_in_date
+                order by p.check_in_date desc
+                limit 1
+            ) earlier on true
+            where later.id = any (cast(:checkInIds as uuid[]))
+              and earlier.weight_grams is not null
+        """,
+        nativeQuery = true,
+    )
+    fun findPreviousWeights(@Param("checkInIds") checkInIds: Array<UUID>): List<PreviousCheckInWeight>
+
     fun findByClientUserIdAndCheckInDate(clientUserId: UUID, checkInDate: LocalDate): CheckInEntity?
 
     fun findByClientUserIdAndCheckInDateBetweenOrderByCheckInDateDesc(
@@ -109,4 +127,11 @@ interface CheckInRepository : JpaRepository<CheckInEntity, UUID> {
         from: LocalDate,
         to: LocalDate,
     ): List<CheckInEntity>
+}
+
+interface PreviousCheckInWeight {
+
+    fun getCheckInId(): UUID
+
+    fun getWeightGrams(): Int
 }
