@@ -18,12 +18,15 @@ import app.trainer.backend.traininglog.ExerciseEntity
 import app.trainer.backend.traininglog.ExerciseOwnerKind
 import app.trainer.backend.traininglog.ExerciseRepository
 import app.trainer.backend.traininglog.TrainingLogEntryRepository
+import app.trainer.backend.traininglog.durationSecondsOf
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.UUID
+import kotlin.math.roundToInt
 import org.springframework.data.repository.findByIdOrNull
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -34,6 +37,8 @@ private const val DAYS_IN_WEEK = 7
 private const val PROGRAMS_PER_PAGE = 20
 private const val PUSH_PROGRAM_ID_KEY = "programId"
 private const val MAX_PLANNED_RANGE_DAYS = 62L
+private const val ESTIMATE_STEP_MINUTES = 5
+private val ESTIMATE_STEP: Duration = Duration.ofMinutes(ESTIMATE_STEP_MINUTES.toLong())
 
 @Service
 class ProgramService(
@@ -325,6 +330,12 @@ class ProgramService(
             .findByProgramDayIdInOrderByPositionAsc(days.map { it.id })
             .groupBy { it.programDayId }
         val names = exerciseNamesOf(linesByDay.values.flatten())
+        val minutesByDayTitle = lastMinutesByDayTitle(
+            program = program,
+            assignment = assignment,
+            days = days,
+            until = to,
+        )
 
         return generateSequence(from) { current -> current.plusDays(1).takeIf { !it.isAfter(to) } }
             .mapNotNull { date ->
@@ -338,9 +349,36 @@ class ProgramService(
                     dayTitle = day.title,
                     weekNumber = day.weekNumber,
                     exercises = lines.map { toResponse(line = it, names = names) },
+                    estimatedMinutes = minutesByDayTitle[day.title],
                 )
             }
             .toList()
+    }
+
+    private fun lastMinutesByDayTitle(
+        program: TrainingProgramEntity,
+        assignment: ProgramAssignmentEntity,
+        days: List<ProgramDayEntity>,
+        until: LocalDate,
+    ): Map<String, Int> {
+        val entries = entryRepository.findByClientUserIdAndEntryDateBetweenOrderByEntryDateDesc(
+            clientUserId = assignment.clientUserId,
+            from = assignment.startsOn,
+            to = until,
+        )
+        val minutesByDayTitle = mutableMapOf<String, Int>()
+        for (entry in entries) {
+            val seconds = durationSecondsOf(startedAt = entry.startedAt, finishedAt = entry.finishedAt)
+            val day = dayFor(program = program, assignment = assignment, days = days, date = entry.entryDate)
+            if (seconds == null || day == null) continue
+            minutesByDayTitle.putIfAbsent(day.title, roundedMinutesOf(seconds))
+        }
+        return minutesByDayTitle
+    }
+
+    private fun roundedMinutesOf(seconds: Long): Int {
+        val steps = (seconds.toDouble() / ESTIMATE_STEP.seconds).roundToInt().coerceAtLeast(1)
+        return steps * ESTIMATE_STEP_MINUTES
     }
 
     private fun dayFor(
