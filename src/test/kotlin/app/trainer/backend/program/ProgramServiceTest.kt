@@ -50,6 +50,12 @@ private const val CANCELLATION_WINDOW_HOURS = 12
 private const val REMINDER_HOUR = 10
 private const val SETS_COUNT = 4
 private const val REPETITIONS = 8
+private const val LAST_TIME_MINUTES = 53L
+private const val LAST_TIME_ROUNDED_MINUTES = 55
+private const val EARLIER_TIME_MINUTES = 70L
+private const val OFF_PLAN_MINUTES = 30L
+private const val SHORTEST_ESTIMATE_MINUTES = 5
+private const val TWO_MINUTES = 2L
 
 @Suppress("UNCHECKED_CAST")
 private fun <T> anyNonNull(): T = ArgumentMatchers.any<T>() ?: (null as T)
@@ -258,6 +264,63 @@ class ProgramServiceTest {
         assertEquals("День ног", planned.first().dayTitle)
         assertEquals(1, planned.first().weekNumber)
         assertEquals("Приседания", planned.first().exercises.single().exerciseName)
+    }
+
+    @Test
+    fun `the planned workout takes about as long as the last one of the same day, to five minutes`() {
+        givenAssignedProgram()
+        val nextWeek = STARTS_ON.plusDays(DAYS_IN_A_WEEK)
+        `when`(
+            entryRepository.findByClientUserIdAndEntryDateBetweenOrderByEntryDateDesc(
+                CLIENT_USER_ID,
+                STARTS_ON,
+                nextWeek,
+            )
+        ).thenReturn(listOf(entryOn(STARTS_ON, lastedMinutes = LAST_TIME_MINUTES)))
+
+        val planned = service.plannedWorkouts(userId = CLIENT_USER_ID, from = nextWeek, to = nextWeek)
+
+        assertEquals(LAST_TIME_ROUNDED_MINUTES, planned.single().estimatedMinutes)
+    }
+
+    @Test
+    fun `the estimate comes from the latest timed workout of that day, not an untimed, off-plan or earlier one`() {
+        givenAssignedProgram()
+        val thirdWeek = STARTS_ON.plusDays(DAYS_IN_A_WEEK * 2)
+        `when`(
+            entryRepository.findByClientUserIdAndEntryDateBetweenOrderByEntryDateDesc(
+                CLIENT_USER_ID,
+                STARTS_ON,
+                thirdWeek,
+            )
+        ).thenReturn(
+            listOf(
+                entryOn(thirdWeek),
+                entryOn(STARTS_ON.plusDays(DAYS_IN_A_WEEK + 1), lastedMinutes = OFF_PLAN_MINUTES),
+                entryOn(STARTS_ON.plusDays(DAYS_IN_A_WEEK), lastedMinutes = TWO_MINUTES),
+                entryOn(STARTS_ON, lastedMinutes = EARLIER_TIME_MINUTES),
+            )
+        )
+
+        val planned = service.plannedWorkouts(userId = CLIENT_USER_ID, from = thirdWeek, to = thirdWeek)
+
+        assertEquals(SHORTEST_ESTIMATE_MINUTES, planned.single().estimatedMinutes)
+    }
+
+    @Test
+    fun `a day never done with a timer has no estimate`() {
+        givenAssignedProgram()
+        `when`(
+            entryRepository.findByClientUserIdAndEntryDateBetweenOrderByEntryDateDesc(
+                CLIENT_USER_ID,
+                STARTS_ON,
+                STARTS_ON,
+            )
+        ).thenReturn(listOf(entryOn(STARTS_ON)))
+
+        val planned = service.plannedWorkouts(userId = CLIENT_USER_ID, from = STARTS_ON, to = STARTS_ON)
+
+        assertNull(planned.single().estimatedMinutes)
     }
 
     @Test
@@ -589,15 +652,20 @@ class ProgramServiceTest {
         isLogged = isLogged,
     )
 
-    private fun entryOn(date: LocalDate): TrainingLogEntryEntity = TrainingLogEntryEntity(
-        id = UUID.randomUUID(),
-        clientUserId = CLIENT_USER_ID,
-        entryDate = date,
-        slotId = null,
-        notes = null,
-        createdAt = NOW,
-        updatedAt = NOW,
-    )
+    private fun entryOn(date: LocalDate, lastedMinutes: Long? = null): TrainingLogEntryEntity {
+        val startedAt = date.atStartOfDay(ZoneOffset.UTC).toInstant()
+        return TrainingLogEntryEntity(
+            id = UUID.randomUUID(),
+            clientUserId = CLIENT_USER_ID,
+            entryDate = date,
+            slotId = null,
+            notes = null,
+            createdAt = NOW,
+            updatedAt = NOW,
+            startedAt = lastedMinutes?.let { startedAt },
+            finishedAt = lastedMinutes?.let { startedAt.plusSeconds(it * SECONDS_IN_A_MINUTE) },
+        )
+    }
 
     private fun squat(): ExerciseEntity = ExerciseEntity(
         id = SQUAT_ID,
@@ -617,6 +685,7 @@ class ProgramServiceTest {
     private companion object {
         const val DAYS_IN_A_WEEK = 7L
         const val SECONDS_IN_A_WEEK = 604_800L
+        const val SECONDS_IN_A_MINUTE = 60L
         val SUNDAY_NIGHT_UTC_MONDAY_IN_MOSCOW: Instant = Instant.parse("2026-03-01T22:00:00Z")
         val FIRST_WEEK_DAY_ID: UUID = UUID.fromString("10000000-0000-0000-0000-00000000000a")
         val SECOND_WEEK_DAY_ID: UUID = UUID.fromString("10000000-0000-0000-0000-00000000000b")

@@ -109,6 +109,7 @@ data class PlannedWorkoutResponse(
     val dayTitle: String,
     val weekNumber: Int,
     val exercises: List<ProgramExerciseResponse>,
+    val estimatedMinutes: Int?,
 )
 
 data class ClientProgramResponse(
