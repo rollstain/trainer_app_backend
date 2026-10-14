@@ -1,5 +1,7 @@
 package app.trainer.backend
 
+import app.trainer.backend.checkin.CheckInRepository
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -45,6 +47,9 @@ class ApplicationStartupTest {
     @Autowired
     private lateinit var jsonMapper: JsonMapper
 
+    @Autowired
+    private lateinit var checkInRepository: CheckInRepository
+
     @Test
     fun `the service starts on an empty database with every migration applied`() {
         val migrations = flyway.info()
@@ -80,6 +85,11 @@ class ApplicationStartupTest {
         assertEquals(HttpStatus.NOT_FOUND, status)
         assertTrue(body.contains("\"message\""), body)
         assertFalse(body.contains("retryAfterSeconds"), body)
+    }
+
+    @Test
+    fun `the weight of the previous check-in is looked up by the schema Postgres really has`() {
+        assertTrue(checkInRepository.findPreviousWeights(arrayOf(UUID.randomUUID())).isEmpty())
     }
 
     private fun get(path: String): Pair<HttpStatusCode, String> =

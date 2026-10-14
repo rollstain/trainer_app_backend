@@ -71,6 +71,9 @@ class CheckInService(
         val names = userRepository
             .findAllById(awaiting.map { it.clientUserId }.distinct())
             .associate { it.id to it.displayName }
+        val awaitingIds = awaiting.map { it.id }
+        val previousWeights = previousWeightsOf(awaitingIds)
+        val photosCounts = mediaFileService.countsOf(ownerKind = MediaOwnerKind.CHECK_IN, ownerIds = awaitingIds)
         return Page(
             items = awaiting.mapNotNull { checkIn ->
                 val name = names[checkIn.clientUserId] ?: return@mapNotNull null
@@ -79,12 +82,23 @@ class CheckInService(
                     clientUserId = checkIn.clientUserId,
                     clientDisplayName = name,
                     checkInDate = checkIn.checkInDate,
+                    weightGrams = checkIn.weightGrams,
+                    previousWeightGrams = previousWeights[checkIn.id],
+                    photosCount = photosCounts[checkIn.id] ?: 0,
+                    notes = checkIn.notes,
                 )
             },
             nextCursor = last?.let {
                 encodeCursor(PageCursor(sortKey = it.checkInDate.toString(), id = it.id))
             },
         )
+    }
+
+    private fun previousWeightsOf(checkInIds: List<UUID>): Map<UUID, Int> {
+        if (checkInIds.isEmpty()) return emptyMap()
+        return checkInRepository
+            .findPreviousWeights(checkInIds.toTypedArray())
+            .associate { it.getCheckInId() to it.getWeightGrams() }
     }
 
     @Transactional

@@ -8,6 +8,7 @@ import app.trainer.backend.coach.CoachRepository
 import app.trainer.backend.config.PageCursor
 import app.trainer.backend.config.decodeCursor
 import app.trainer.backend.media.MediaFileService
+import app.trainer.backend.media.MediaOwnerKind
 import app.trainer.backend.push.PushMessage
 import app.trainer.backend.push.PushSender
 import app.trainer.backend.push.PushText
@@ -46,6 +47,9 @@ private const val REMINDER_HOUR = 10
 private const val PAGE_SIZE = 2
 private const val PAGE_SIZE_WITH_PROBE = PAGE_SIZE + 1
 private const val AWAITING_BEYOND_A_PAGE = 25L
+private const val WEIGHT_NOW_GRAMS = 71_400
+private const val WEIGHT_BEFORE_GRAMS = 72_000
+private const val PHOTOS_SENT = 2
 
 @Suppress("UNCHECKED_CAST")
 private fun <T> anyNonNull(): T = ArgumentMatchers.any<T>() ?: (null as T)
@@ -111,6 +115,47 @@ class CheckInReviewTest {
         assertEquals("Анна", awaiting.items.single().clientDisplayName)
         assertEquals(CHECK_IN_DATE, awaiting.items.single().checkInDate)
         assertNull(awaiting.nextCursor, "очередь уместилась целиком — продолжения нет")
+    }
+
+    @Test
+    fun `a check-in in the queue brings its weight, the weight a check-in before, photos and the note`() {
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(checkInRepository.findAwaitingPage(COACH_ID, null, null, PAGE_SIZE_WITH_PROBE))
+            .thenReturn(listOf(checkIn(weightGrams = WEIGHT_NOW_GRAMS, notes = "Спина после становой тянет")))
+        `when`(userRepository.findAllById(listOf(CLIENT_USER_ID))).thenReturn(listOf(client()))
+        `when`(checkInRepository.findPreviousWeights(arrayOf(CHECK_IN_ID)))
+            .thenReturn(listOf(previousWeight(WEIGHT_BEFORE_GRAMS)))
+        `when`(mediaFileService.countsOf(MediaOwnerKind.CHECK_IN, listOf(CHECK_IN_ID)))
+            .thenReturn(mapOf(CHECK_IN_ID to PHOTOS_SENT))
+
+        val awaiting = service
+            .awaitingReview(coachUserId = COACH_USER_ID, limit = PAGE_SIZE, after = null)
+            .items
+            .single()
+
+        assertEquals(WEIGHT_NOW_GRAMS, awaiting.weightGrams)
+        assertEquals(WEIGHT_BEFORE_GRAMS, awaiting.previousWeightGrams)
+        assertEquals(PHOTOS_SENT, awaiting.photosCount)
+        assertEquals("Спина после становой тянет", awaiting.notes)
+    }
+
+    @Test
+    fun `the first check-in without photos has nothing to compare with and no photos`() {
+        `when`(coachRepository.findByUserId(COACH_USER_ID)).thenReturn(coach())
+        `when`(checkInRepository.findAwaitingPage(COACH_ID, null, null, PAGE_SIZE_WITH_PROBE))
+            .thenReturn(listOf(checkIn(weightGrams = WEIGHT_NOW_GRAMS)))
+        `when`(userRepository.findAllById(listOf(CLIENT_USER_ID))).thenReturn(listOf(client()))
+        `when`(checkInRepository.findPreviousWeights(arrayOf(CHECK_IN_ID))).thenReturn(emptyList())
+        `when`(mediaFileService.countsOf(MediaOwnerKind.CHECK_IN, listOf(CHECK_IN_ID))).thenReturn(emptyMap())
+
+        val awaiting = service
+            .awaitingReview(coachUserId = COACH_USER_ID, limit = PAGE_SIZE, after = null)
+            .items
+            .single()
+
+        assertNull(awaiting.previousWeightGrams)
+        assertEquals(0, awaiting.photosCount)
+        assertNull(awaiting.notes)
     }
 
     @Test
@@ -283,17 +328,28 @@ class CheckInReviewTest {
         createdAt = NOW,
     )
 
-    private fun checkIn(clientUserId: UUID = CLIENT_USER_ID, id: UUID = CHECK_IN_ID): CheckInEntity = CheckInEntity(
+    private fun previousWeight(grams: Int): PreviousCheckInWeight = object : PreviousCheckInWeight {
+        override fun getCheckInId(): UUID = CHECK_IN_ID
+
+        override fun getWeightGrams(): Int = grams
+    }
+
+    private fun checkIn(
+        clientUserId: UUID = CLIENT_USER_ID,
+        id: UUID = CHECK_IN_ID,
+        weightGrams: Int? = null,
+        notes: String? = null,
+    ): CheckInEntity = CheckInEntity(
         id = id,
         clientUserId = clientUserId,
         checkInDate = CHECK_IN_DATE,
-        weightGrams = null,
+        weightGrams = weightGrams,
         waistMillimeters = null,
         chestMillimeters = null,
         hipsMillimeters = null,
         wellbeing = null,
         sleepQuality = null,
-        notes = null,
+        notes = notes,
         adherence = null,
         coachComment = null,
         reviewedAt = null,
